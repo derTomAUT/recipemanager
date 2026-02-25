@@ -176,16 +176,17 @@ export class HouseholdSettingsComponent implements OnInit {
       return;
     }
 
-    if (!this.hasApiKey && !this.apiKeyInput.trim()) {
+    const apiKey = this.apiKeyInput.trim();
+    if (!this.hasApiKey && !apiKey) {
       this.modelsError = 'Enter an API key to load models.';
       return;
     }
 
-    if (!this.hasApiKey && this.apiKeyInput.trim()) {
+    if (apiKey) {
       this.saving = true;
       this.settingsService.updateSettings({
         aiProvider: this.provider,
-        apiKey: this.apiKeyInput.trim()
+        apiKey
       }).subscribe({
         next: (settings) => {
           this.hasApiKey = settings.hasApiKey;
