@@ -16,6 +16,7 @@ RUN dotnet publish src/RecipeManager.Api/RecipeManager.Api.csproj -c Release -o 
 # Stage 3: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
+RUN mkdir -p /app/uploads
 COPY --from=backend-build /app/publish .
 COPY --from=frontend-build /app/frontend/dist/frontend/browser ./wwwroot
 EXPOSE 5000
