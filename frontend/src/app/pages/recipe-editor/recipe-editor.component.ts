@@ -6,6 +6,7 @@ import { RecipeService } from '../../services/recipe.service';
 import { RecipeDraftService } from '../../services/recipe-draft.service';
 import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDraft, ImportedImageInput, CandidateImageInput } from '../../models/recipe.model';
 import { resolveImageUrl } from '../../utils/url.utils';
+import { environment } from '../../../environments/environment';
 import { RecipeImportService } from '../../services/recipe-import.service';
 
 @Component({
@@ -402,7 +403,7 @@ export class RecipeEditorComponent implements OnInit {
 
     if (hero) {
       ordered.push({
-        url: hero.url,
+        url: this.normalizeImageUrl(hero.url),
         isTitleImage: true,
         orderIndex: 0
       });
@@ -412,7 +413,7 @@ export class RecipeEditorComponent implements OnInit {
     for (const candidate of selected) {
       if (hero && candidate.url === hero.url) continue;
       ordered.push({
-        url: candidate.url,
+        url: this.normalizeImageUrl(candidate.url),
         isTitleImage: false,
         orderIndex
       });
@@ -425,13 +426,22 @@ export class RecipeEditorComponent implements OnInit {
   cleanupTempImages() {
     const tempUrls = this.candidateImages
       .filter(c => !this.isSelected(c))
-      .map(c => c.url);
+      .map(c => this.normalizeImageUrl(c.url));
     if (!tempUrls.length) return;
 
     this.recipeImportService.cleanupTempImages(tempUrls).subscribe({
       next: () => {},
       error: () => {}
     });
+  }
+
+  private normalizeImageUrl(url: string): string {
+    const base = environment.apiUrl.replace(/\/api\/?$/, '');
+    if (url.startsWith(base)) {
+      const trimmed = url.substring(base.length);
+      return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    }
+    return url;
   }
 
   onFileSelect(event: Event) {
