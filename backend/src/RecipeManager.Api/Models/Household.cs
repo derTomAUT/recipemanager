@@ -6,6 +6,9 @@ public class Household
     public string Name { get; set; } = string.Empty;
     public string InviteCode { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? AiProvider { get; set; }
+    public string? AiModel { get; set; }
+    public string? AiApiKeyEncrypted { get; set; }
     public ICollection<HouseholdMember> Members { get; set; } = new List<HouseholdMember>();
 }
 
