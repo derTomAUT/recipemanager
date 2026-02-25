@@ -22,6 +22,7 @@ import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput } from '..
       </header>
 
       <form class="editor-form" (ngSubmit)="save()">
+        <div *ngIf="loading" class="loading">Loading recipe...</div>
         <div *ngIf="error" class="error">{{ error }}</div>
 
         <section class="form-section">
@@ -111,9 +112,9 @@ import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput } from '..
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-secondary { background: #6c757d; color: white; }
     .btn-add { background: #28a745; color: white; margin-top: 0.5rem; }
-    .btn-small { padding: 0.25rem 0.5rem; font-size: 0.75rem; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; }
+    .btn-small { padding: 0.5rem 0.75rem; font-size: 0.85rem; min-height: 44px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; }
     .btn-danger { background: #dc3545; color: white; border-color: #dc3545; }
-    .btn-remove { background: #dc3545; color: white; border: none; border-radius: 4px; width: 32px; height: 32px; cursor: pointer; font-size: 1.25rem; flex-shrink: 0; }
+    .btn-remove { background: #dc3545; color: white; border: none; border-radius: 4px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; cursor: pointer; font-size: 1.25rem; flex-shrink: 0; }
     .form-section { margin-bottom: 2rem; padding: 1rem; border: 1px solid #eee; border-radius: 8px; }
     .form-section h2 { margin: 0 0 1rem; font-size: 1.1rem; color: #333; }
     .form-group { margin-bottom: 1rem; }
@@ -140,6 +141,7 @@ import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput } from '..
     .upload-area { margin-top: 0.5rem; }
     .upload-area input { padding: 0.5rem; }
     .error { color: #dc3545; padding: 0.75rem; background: #f8d7da; border-radius: 4px; margin-bottom: 1rem; }
+    .loading { text-align: center; padding: 2rem; color: #666; }
     @media (max-width: 600px) {
       .ingredient-row { flex-wrap: wrap; }
       .ingredient-row .qty-input, .ingredient-row .unit-input { width: calc(50% - 0.25rem); }
@@ -155,6 +157,7 @@ export class RecipeEditorComponent implements OnInit {
   recipeId: string | null = null;
   saving = false;
   uploading = false;
+  loading = false;
   error = '';
 
   recipe: CreateRecipeRequest = {
@@ -184,6 +187,7 @@ export class RecipeEditorComponent implements OnInit {
     this.isEdit = !!this.recipeId;
 
     if (this.isEdit && this.recipeId) {
+      this.loading = true;
       this.loadRecipe(this.recipeId);
     } else {
       this.addIngredient();
@@ -216,8 +220,12 @@ export class RecipeEditorComponent implements OnInit {
         }));
         this.images = data.images;
         this.tagsInput = data.tags.join(', ');
+        this.loading = false;
       },
-      error: () => this.error = 'Failed to load recipe'
+      error: () => {
+        this.error = 'Failed to load recipe';
+        this.loading = false;
+      }
     });
   }
 
