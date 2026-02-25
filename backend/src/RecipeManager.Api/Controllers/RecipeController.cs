@@ -383,7 +383,13 @@ public class RecipeController : ControllerBase
 
         try
         {
-            var draft = await importService.ImportFromUrlAsync(request.Url);
+            var household = await _db.Households.FindAsync(membership.Value.householdId);
+            if (household == null)
+            {
+                return NotFound();
+            }
+
+            var draft = await importService.ImportFromUrlAsync(request.Url, household);
             return Ok(draft);
         }
         catch

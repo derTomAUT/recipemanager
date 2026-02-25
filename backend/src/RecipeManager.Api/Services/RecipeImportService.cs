@@ -1,36 +1,43 @@
 using System.Text.Json;
 using HtmlAgilityPack;
 using RecipeManager.Api.DTOs;
+using RecipeManager.Api.Models;
 
 namespace RecipeManager.Api.Services;
 
 public class RecipeImportService
 {
-    private readonly IHttpClientFactory? _httpClientFactory;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly AiRecipeImportService _aiImportService;
 
-    public RecipeImportService(IHttpClientFactory? httpClientFactory)
+    public RecipeImportService(IHttpClientFactory httpClientFactory, AiRecipeImportService aiImportService)
     {
         _httpClientFactory = httpClientFactory;
+        _aiImportService = aiImportService;
     }
 
-    public async Task<RecipeDraftDto> ImportFromUrlAsync(string url)
+    public async Task<RecipeDraftDto> ImportFromUrlAsync(string url, Household household)
     {
-        if (_httpClientFactory == null)
-        {
-            throw new InvalidOperationException("HttpClientFactory is not available.");
-        }
-
         var client = _httpClientFactory.CreateClient();
         var html = await client.GetStringAsync(url);
-        return ExtractDraftFromHtml(html, url);
+        return await ExtractDraftFromHtmlAsync(html, url, household);
     }
 
-    public RecipeDraftDto ExtractDraftFromHtml(string html, string url)
+    public async Task<RecipeDraftDto> ExtractDraftFromHtmlAsync(string html, string url, Household household)
     {
         var jsonLdDraft = TryParseJsonLd(html);
         if (jsonLdDraft != null)
         {
             return jsonLdDraft with { ConfidenceScore = 0.8 };
+        }
+
+        if (HasAiSettings(household))
+        {
+            return await _aiImportService.ImportAsync(
+                household.AiProvider!,
+                household.AiModel!,
+                household.AiApiKeyEncrypted!,
+                url);
         }
 
         var heuristicDraft = TryParseHeuristics(html);
@@ -39,6 +46,13 @@ public class RecipeImportService
             ConfidenceScore = 0.4,
             Warnings = new List<string> { "JSON-LD not found; used heuristic extraction." }
         };
+    }
+
+    private static bool HasAiSettings(Household household)
+    {
+        return !string.IsNullOrWhiteSpace(household.AiProvider) &&
+               !string.IsNullOrWhiteSpace(household.AiModel) &&
+               !string.IsNullOrWhiteSpace(household.AiApiKeyEncrypted);
     }
 
     private RecipeDraftDto? TryParseJsonLd(string html)

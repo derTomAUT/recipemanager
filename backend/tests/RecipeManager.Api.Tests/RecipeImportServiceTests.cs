@@ -1,10 +1,12 @@
-﻿using RecipeManager.Api.Services;
+using Microsoft.AspNetCore.DataProtection;
+using RecipeManager.Api.Models;
+using RecipeManager.Api.Services;
 using Xunit;
 
 public class RecipeImportServiceTests
 {
     [Fact]
-    public void ExtractDraftFromHtml_ParsesJsonLdRecipe()
+    public async Task ExtractDraftFromHtml_ParsesJsonLdRecipe()
     {
         var html = @"
 <html><head>
@@ -13,11 +15,21 @@ public class RecipeImportServiceTests
 </script>
 </head><body></body></html>";
 
-        var service = new RecipeImportService(null!); // HttpClient not needed for extraction
-        var draft = service.ExtractDraftFromHtml(html, "https://example.com");
+        var dataProtectionProvider = DataProtectionProvider.Create("RecipeManager.Tests");
+        var aiSettings = new HouseholdAiSettingsService(dataProtectionProvider);
+        var aiImport = new AiRecipeImportService(new TestHttpClientFactory(), aiSettings);
+        var service = new RecipeImportService(new TestHttpClientFactory(), aiImport);
+
+        var household = new Household();
+        var draft = await service.ExtractDraftFromHtmlAsync(html, "https://example.com", household);
 
         Assert.Equal("Test Cake", draft.Title);
         Assert.Single(draft.Ingredients);
         Assert.Equal(2, draft.Steps.Count);
+    }
+
+    private sealed class TestHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string? name = null) => new();
     }
 }
