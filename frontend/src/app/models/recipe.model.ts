@@ -1,0 +1,51 @@
+export interface Recipe {
+  id: string;
+  title: string;
+  description?: string;
+  servings?: number;
+  prepMinutes?: number;
+  cookMinutes?: number;
+  titleImageUrl?: string;
+  tags: string[];
+  cookCount: number;
+  lastCooked?: string;
+  createdAt: string;
+}
+
+export interface RecipeDetail extends Recipe {
+  ingredients: RecipeIngredient[];
+  steps: RecipeStep[];
+  images: RecipeImage[];
+  updatedAt: string;
+  createdByUserId: string;
+}
+
+export interface RecipeIngredient {
+  id: string;
+  orderIndex: number;
+  name: string;
+  quantity?: string;
+  unit?: string;
+  notes?: string;
+}
+
+export interface RecipeStep {
+  id: string;
+  orderIndex: number;
+  instruction: string;
+  timerSeconds?: number;
+}
+
+export interface RecipeImage {
+  id: string;
+  url: string;
+  isTitleImage: boolean;
+  orderIndex: number;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
