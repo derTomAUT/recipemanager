@@ -8,11 +8,16 @@ public class AiRecipeImportService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly HouseholdAiSettingsService _settings;
+    private readonly ILogger<AiRecipeImportService> _logger;
 
-    public AiRecipeImportService(IHttpClientFactory httpClientFactory, HouseholdAiSettingsService settings)
+    public AiRecipeImportService(
+        IHttpClientFactory httpClientFactory,
+        HouseholdAiSettingsService settings,
+        ILogger<AiRecipeImportService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _settings = settings;
+        _logger = logger;
     }
 
     public async Task<RecipeDraftDto> ImportAsync(string provider, string model, string encryptedKey, string url)
@@ -41,6 +46,7 @@ public class AiRecipeImportService
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = json.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            _logger.LogDebug("AI import response (OpenAI): {Json}", content);
             return ParseDraftFromJson(content);
         }
 
@@ -59,6 +65,7 @@ public class AiRecipeImportService
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = json.GetProperty("content")[0].GetProperty("text").GetString();
+            _logger.LogDebug("AI import response (Anthropic): {Json}", content);
             return ParseDraftFromJson(content);
         }
 
@@ -84,14 +91,14 @@ public class AiRecipeImportService
         {
             foreach (var item in ingEl.EnumerateArray())
             {
-                var name = item.TryGetProperty("name", out var n) ? n.GetString() : null;
+                var name = item.TryGetProperty("name", out var n) ? GetFlexibleString(n) : null;
                 if (string.IsNullOrWhiteSpace(name)) continue;
 
                 ingredients.Add(new IngredientDto(
                     name,
-                    item.TryGetProperty("quantity", out var q) ? q.GetString() : null,
-                    item.TryGetProperty("unit", out var u) ? u.GetString() : null,
-                    item.TryGetProperty("notes", out var notes) ? notes.GetString() : null
+                    item.TryGetProperty("quantity", out var q) ? GetFlexibleString(q) : null,
+                    item.TryGetProperty("unit", out var u) ? GetFlexibleString(u) : null,
+                    item.TryGetProperty("notes", out var notes) ? GetFlexibleString(notes) : null
                 ));
             }
         }
@@ -101,13 +108,13 @@ public class AiRecipeImportService
         {
             foreach (var item in stepEl.EnumerateArray())
             {
-                var instruction = item.TryGetProperty("instruction", out var i) ? i.GetString() : null;
+                var instruction = item.TryGetProperty("instruction", out var i) ? GetFlexibleString(i) : null;
                 if (string.IsNullOrWhiteSpace(instruction)) continue;
 
                 int? timerSeconds = null;
-                if (item.TryGetProperty("timerSeconds", out var t) && t.ValueKind == JsonValueKind.Number)
+                if (item.TryGetProperty("timerSeconds", out var t))
                 {
-                    timerSeconds = t.GetInt32();
+                    timerSeconds = TryGetInt(t);
                 }
 
                 steps.Add(new StepDto(instruction, timerSeconds));
@@ -118,22 +125,65 @@ public class AiRecipeImportService
         if (root.TryGetProperty("tags", out var tagEl) && tagEl.ValueKind == JsonValueKind.Array)
         {
             tags = tagEl.EnumerateArray()
-                .Select(t => t.GetString() ?? string.Empty)
-                .Where(t => t.Length > 0)
+                .Select(GetFlexibleString)
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => t!)
                 .ToList();
         }
 
         return new RecipeDraftDto(
-            root.TryGetProperty("title", out var title) ? title.GetString() ?? "Imported Recipe" : "Imported Recipe",
-            root.TryGetProperty("description", out var desc) ? desc.GetString() : null,
-            root.TryGetProperty("servings", out var serv) && serv.ValueKind == JsonValueKind.Number ? serv.GetInt32() : null,
-            root.TryGetProperty("prepMinutes", out var prep) && prep.ValueKind == JsonValueKind.Number ? prep.GetInt32() : null,
-            root.TryGetProperty("cookMinutes", out var cook) && cook.ValueKind == JsonValueKind.Number ? cook.GetInt32() : null,
+            root.TryGetProperty("title", out var title) ? GetFlexibleString(title) ?? "Imported Recipe" : "Imported Recipe",
+            root.TryGetProperty("description", out var desc) ? GetFlexibleString(desc) : null,
+            root.TryGetProperty("servings", out var serv) ? TryGetInt(serv) : null,
+            root.TryGetProperty("prepMinutes", out var prep) ? TryGetInt(prep) : null,
+            root.TryGetProperty("cookMinutes", out var cook) ? TryGetInt(cook) : null,
             ingredients,
             steps,
             tags,
             0.6,
             new List<string> { "Imported with AI" }
         );
+    }
+
+    private static string? GetFlexibleString(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null
+        };
+    }
+
+    private static int? TryGetInt(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Number)
+        {
+            if (element.TryGetInt32(out var value))
+            {
+                return value;
+            }
+            if (element.TryGetDouble(out var dbl))
+            {
+                return (int)Math.Round(dbl);
+            }
+        }
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            var text = element.GetString();
+            if (int.TryParse(text, out var value))
+            {
+                return value;
+            }
+            if (double.TryParse(text, out var dbl))
+            {
+                return (int)Math.Round(dbl);
+            }
+        }
+
+        return null;
     }
 }
