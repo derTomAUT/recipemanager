@@ -20,17 +20,27 @@ public class AiRecipeImportService
         _logger = logger;
     }
 
-    public async Task<RecipeDraftDto> ImportAsync(string provider, string model, string encryptedKey, string url)
+    public async Task<RecipeDraftDto> ImportAsync(
+        string provider,
+        string model,
+        string encryptedKey,
+        string url,
+        string readableText,
+        bool wasTruncated)
     {
         var apiKey = _settings.Decrypt(encryptedKey).Trim();
         var client = _httpClientFactory.CreateClient();
+
+        var readableSection = string.IsNullOrWhiteSpace(readableText)
+            ? "Readable text was unavailable."
+            : $"Readable text (truncated={wasTruncated}):\n{readableText}";
 
         var prompt = "Read the following recipe website and extract the concrete recipe. Return a single JSON object with fields: " +
                      "title, description, servings, prepMinutes, cookMinutes, " +
                      "ingredients (array of { name, quantity, unit, notes }), " +
                      "steps (array of { instruction, timerSeconds }), " +
                      "tags (array of strings). " +
-                     $"URL: {url}";
+                     $"URL: {url}\n\n{readableSection}";
 
         _logger.LogDebug("AI Import Prompt: {prompt}", prompt);
         if (provider == "OpenAI")
@@ -42,7 +52,10 @@ public class AiRecipeImportService
                 messages = new[] { new { role = "user", content = prompt } },
                 response_format = new { type = "json_object" }
             };
+            _logger.LogDebug("OpenAI Payload: {payload}", payload);
 
+            var payloadJson = JsonSerializer.Serialize(payload);
+            _logger.LogDebug("AI import request (OpenAI): {Json}", payloadJson);
             var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", payload);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -62,6 +75,8 @@ public class AiRecipeImportService
                 messages = new[] { new { role = "user", content = $"{prompt}\n\nReturn JSON only." } }
             };
 
+            var payloadJson = JsonSerializer.Serialize(payload);
+            _logger.LogDebug("AI import request (Anthropic): {Json}", payloadJson);
             var response = await client.PostAsJsonAsync("https://api.anthropic.com/v1/messages", payload);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();

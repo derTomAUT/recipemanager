@@ -33,11 +33,20 @@ public class RecipeImportService
 
         if (HasAiSettings(household))
         {
+            var readableText = ExtractReadableText(html);
+            var wasTruncated = readableText.Length > 100_000;
+            if (wasTruncated)
+            {
+                readableText = readableText[..100_000];
+            }
+
             return await _aiImportService.ImportAsync(
                 household.AiProvider!,
                 household.AiModel!,
                 household.AiApiKeyEncrypted!,
-                url);
+                url,
+                readableText,
+                wasTruncated);
         }
 
         var heuristicDraft = TryParseHeuristics(html);
@@ -53,6 +62,30 @@ public class RecipeImportService
         return !string.IsNullOrWhiteSpace(household.AiProvider) &&
                !string.IsNullOrWhiteSpace(household.AiModel) &&
                !string.IsNullOrWhiteSpace(household.AiApiKeyEncrypted);
+    }
+
+    public string ExtractReadableText(string html)
+    {
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+
+        var junkNodes = doc.DocumentNode.SelectNodes("//script|//style|//nav|//header|//footer|//noscript");
+        if (junkNodes != null)
+        {
+            foreach (var node in junkNodes)
+            {
+                node.Remove();
+            }
+        }
+
+        var main = doc.DocumentNode.SelectSingleNode("//main") ?? doc.DocumentNode;
+        var text = HtmlEntity.DeEntitize(main.InnerText);
+        var cleaned = string.Join(' ',
+            text.Split('\n', '\r', '\t')
+                .Select(t => t.Trim())
+                .Where(t => t.Length > 0));
+
+        return cleaned;
     }
 
     private RecipeDraftDto? TryParseJsonLd(string html)
