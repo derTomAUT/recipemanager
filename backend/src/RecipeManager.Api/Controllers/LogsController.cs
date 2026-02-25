@@ -32,7 +32,7 @@ public class LogsController : ControllerBase
         }
 
         var logFile = Directory.GetFiles(logDir, "recipemanager-*.log")
-            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .OrderByDescending(System.IO.File.GetLastWriteTimeUtc)
             .FirstOrDefault();
 
         if (logFile == null)
@@ -43,7 +43,11 @@ public class LogsController : ControllerBase
 
         _logger.LogInformation("Starting log stream for {LogFile}", logFile);
 
-        await using var stream = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        await using var stream = new System.IO.FileStream(
+            logFile,
+            System.IO.FileMode.Open,
+            System.IO.FileAccess.Read,
+            System.IO.FileShare.ReadWrite);
         using var reader = new StreamReader(stream);
 
         stream.Seek(0, SeekOrigin.End);
