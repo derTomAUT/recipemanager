@@ -524,9 +524,23 @@ public class RecipeController : ControllerBase
             return BadRequest("Invalid file type. Allowed: jpg, jpeg, png, gif, webp");
         }
 
+        var allowedContentTypes = new[] { "image/jpeg", "image/png", "image/gif", "image/webp" };
+        if (string.IsNullOrEmpty(file.ContentType) || !allowedContentTypes.Contains(file.ContentType.ToLowerInvariant()))
+        {
+            return BadRequest("Invalid content type. Allowed: image/jpeg, image/png, image/gif, image/webp");
+        }
+
         // Upload to storage
-        using var stream = file.OpenReadStream();
-        var url = await _storageService.UploadAsync(stream, file.FileName, file.ContentType);
+        string url;
+        try
+        {
+            using var stream = file.OpenReadStream();
+            url = await _storageService.UploadAsync(stream, file.FileName, file.ContentType);
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "Failed to upload image");
+        }
 
         // Create RecipeImage record
         var existingCount = await _db.RecipeImages.CountAsync(i => i.RecipeId == id);
@@ -633,7 +647,14 @@ public class RecipeController : ControllerBase
         }
 
         // Delete from storage
-        await _storageService.DeleteAsync(image.Url);
+        try
+        {
+            await _storageService.DeleteAsync(image.Url);
+        }
+        catch (Exception)
+        {
+            // Log would go here; continue with DB deletion
+        }
 
         // Remove from database
         var wasTitleImage = image.IsTitleImage;
