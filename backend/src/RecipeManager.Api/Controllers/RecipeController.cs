@@ -737,6 +737,12 @@ public class RecipeController : ControllerBase
             return Unauthorized();
         }
 
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
         var favorite = await _db.FavoriteRecipes
             .FirstOrDefaultAsync(f => f.UserId == userId.Value && f.RecipeId == id);
 
@@ -762,18 +768,26 @@ public class RecipeController : ControllerBase
             return Unauthorized();
         }
 
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
         // Clamp pageSize to reasonable bounds
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        // Get total count of favorites
+        // Get total count of favorites (filtered by household)
         var totalCount = await _db.FavoriteRecipes
-            .Where(f => f.UserId == userId.Value)
+            .Where(f => f.UserId == userId.Value && f.Recipe.HouseholdId == householdId)
             .CountAsync();
 
-        // Get favorites with recipe details
+        // Get favorites with recipe details (filtered by household)
         var favorites = await _db.FavoriteRecipes
-            .Where(f => f.UserId == userId.Value)
+            .Where(f => f.UserId == userId.Value && f.Recipe.HouseholdId == householdId)
             .OrderByDescending(f => f.FavoritedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
