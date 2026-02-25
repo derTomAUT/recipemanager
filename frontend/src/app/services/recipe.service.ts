@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Recipe, RecipeDetail, PagedResult } from '../models/recipe.model';
+import { Recipe, RecipeDetail, RecipeImage, PagedResult, CreateRecipeRequest, UpdateRecipeRequest } from '../models/recipe.model';
 
 @Injectable({ providedIn: 'root' })
 export class RecipeService {
@@ -31,5 +31,27 @@ export class RecipeService {
 
   deleteRecipe(id: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+
+  createRecipe(recipe: CreateRecipeRequest): Observable<RecipeDetail> {
+    return this.http.post<RecipeDetail>(this.apiUrl, recipe);
+  }
+
+  updateRecipe(id: string, recipe: UpdateRecipeRequest): Observable<RecipeDetail> {
+    return this.http.put<RecipeDetail>(`${this.apiUrl}/${id}`, recipe);
+  }
+
+  uploadImage(recipeId: string, file: File): Observable<RecipeImage> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<RecipeImage>(`${this.apiUrl}/${recipeId}/images`, formData);
+  }
+
+  setTitleImage(recipeId: string, imageId: string): Observable<RecipeImage[]> {
+    return this.http.patch<RecipeImage[]>(`${this.apiUrl}/${recipeId}/title-image`, { imageId });
+  }
+
+  deleteImage(recipeId: string, imageId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${recipeId}/images/${imageId}`);
   }
 }

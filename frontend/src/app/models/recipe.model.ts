@@ -49,3 +49,28 @@ export interface PagedResult<T> {
   page: number;
   pageSize: number;
 }
+
+export interface CreateRecipeRequest {
+  title: string;
+  description?: string;
+  servings?: number;
+  prepMinutes?: number;
+  cookMinutes?: number;
+  ingredients: IngredientInput[];
+  steps: StepInput[];
+  tags: string[];
+}
+
+export interface UpdateRecipeRequest extends CreateRecipeRequest {}
+
+export interface IngredientInput {
+  name: string;
+  quantity?: string;
+  unit?: string;
+  notes?: string;
+}
+
+export interface StepInput {
+  instruction: string;
+  timerSeconds?: number;
+}
