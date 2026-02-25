@@ -6,7 +6,7 @@ import { RecipeDraft } from '../models/recipe.model';
 
 @Injectable({ providedIn: 'root' })
 export class RecipeImportService {
-  private apiUrl = `${environment.apiUrl}/recipe/import/url`;
+  private apiUrl = `${environment.apiUrl}/recipes/import/url`;
 
   constructor(private http: HttpClient) {}
 
