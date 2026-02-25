@@ -28,6 +28,9 @@ import { Recipe, PagedResult } from '../../models/recipe.model';
 
       <div class="recipe-grid" *ngIf="result">
         <div *ngFor="let recipe of result.items" class="recipe-card" [routerLink]="['/recipes', recipe.id]">
+          <button class="favorite-btn" [class.favorited]="isFavorite(recipe.id)" (click)="toggleFavorite($event, recipe.id)" aria-label="Toggle favorite">
+            {{ isFavorite(recipe.id) ? '&hearts;' : '&hearts;' }}
+          </button>
           <div class="recipe-image">
             <img *ngIf="recipe.titleImageUrl" [src]="recipe.titleImageUrl" [alt]="recipe.title" />
             <div *ngIf="!recipe.titleImageUrl" class="no-image">No Image</div>
@@ -71,8 +74,10 @@ import { Recipe, PagedResult } from '../../models/recipe.model';
     .search-bar input { flex: 1; padding: 0.5rem; font-size: 1rem; }
     .search-bar button { padding: 0.75rem 1rem; min-height: 44px; }
     .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-    .recipe-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
+    .recipe-card { position: relative; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
     .recipe-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .favorite-btn { position: absolute; top: 8px; right: 8px; background: white; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 1.25rem; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1; color: #ccc; }
+    .favorite-btn.favorited { color: #dc3545; }
     .recipe-image img { width: 100%; height: 180px; object-fit: cover; }
     .no-image { width: 100%; height: 180px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #999; }
     .recipe-info { padding: 1rem; }
@@ -97,6 +102,7 @@ export class RecipeListComponent implements OnInit {
   searchTerm = '';
   currentPage = 1;
   pageSize = 20;
+  favoriteIds: Set<string> = new Set();
 
   constructor(private recipeService: RecipeService) {}
 
@@ -115,6 +121,7 @@ export class RecipeListComponent implements OnInit {
       next: (data) => {
         this.result = data;
         this.loading = false;
+        this.loadFavorites();
       },
       error: () => {
         this.error = 'Failed to load recipes';
@@ -135,5 +142,32 @@ export class RecipeListComponent implements OnInit {
 
   get totalPages(): number {
     return this.result ? Math.ceil(this.result.totalCount / this.result.pageSize) : 0;
+  }
+
+  loadFavorites() {
+    this.recipeService.getFavorites({ pageSize: 100 }).subscribe({
+      next: (data) => {
+        this.favoriteIds = new Set(data.items.map(r => r.id));
+      }
+    });
+  }
+
+  isFavorite(id: string): boolean {
+    return this.favoriteIds.has(id);
+  }
+
+  toggleFavorite(event: Event, id: string) {
+    event.stopPropagation();
+    if (this.favoriteIds.has(id)) {
+      this.recipeService.removeFavorite(id).subscribe({
+        next: () => this.favoriteIds.delete(id),
+        error: () => this.error = 'Failed to update favorite'
+      });
+    } else {
+      this.recipeService.addFavorite(id).subscribe({
+        next: () => this.favoriteIds.add(id),
+        error: () => this.error = 'Failed to update favorite'
+      });
+    }
   }
 }

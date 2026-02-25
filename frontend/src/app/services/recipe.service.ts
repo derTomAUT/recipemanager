@@ -54,4 +54,19 @@ export class RecipeService {
   deleteImage(recipeId: string, imageId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${recipeId}/images/${imageId}`);
   }
+
+  addFavorite(recipeId: string): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/${recipeId}/favorite`, {});
+  }
+
+  removeFavorite(recipeId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${recipeId}/favorite`);
+  }
+
+  getFavorites(params: { page?: number; pageSize?: number } = {}): Observable<PagedResult<Recipe>> {
+    let httpParams = new HttpParams();
+    if (params.page) httpParams = httpParams.set('page', params.page.toString());
+    if (params.pageSize) httpParams = httpParams.set('pageSize', params.pageSize.toString());
+    return this.http.get<PagedResult<Recipe>>(`${this.apiUrl}/favorites`, { params: httpParams });
+  }
 }
