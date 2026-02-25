@@ -99,3 +99,5 @@ public record PagedResult<T>(
     int Page,
     int PageSize
 );
+
+public record SetTitleImageRequest(Guid ImageId);

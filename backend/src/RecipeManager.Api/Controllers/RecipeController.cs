@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RecipeManager.Api.Data;
 using RecipeManager.Api.DTOs;
+using RecipeManager.Api.Infrastructure.Storage;
 using RecipeManager.Api.Models;
 
 namespace RecipeManager.Api.Controllers;
@@ -14,10 +15,15 @@ namespace RecipeManager.Api.Controllers;
 public class RecipeController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IStorageService _storageService;
 
-    public RecipeController(AppDbContext db)
+    private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+    private const long MaxFileSize = 10 * 1024 * 1024; // 10MB
+
+    public RecipeController(AppDbContext db, IStorageService storageService)
     {
         _db = db;
+        _storageService = storageService;
     }
 
     [HttpGet]
@@ -470,6 +476,184 @@ public class RecipeController : ControllerBase
 
         _db.Recipes.Remove(recipe);
         await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/images")]
+    public async Task<ActionResult<RecipeImageDto>> UploadImage(Guid id, IFormFile file)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        // Verify recipe exists and belongs to household
+        var recipe = await _db.Recipes
+            .Where(r => r.Id == id && r.HouseholdId == householdId)
+            .FirstOrDefaultAsync();
+
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        // Validate file
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest("No file provided");
+        }
+
+        if (file.Length > MaxFileSize)
+        {
+            return BadRequest("File size exceeds 10MB limit");
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(extension))
+        {
+            return BadRequest("Invalid file type. Allowed: jpg, jpeg, png, gif, webp");
+        }
+
+        // Upload to storage
+        using var stream = file.OpenReadStream();
+        var url = await _storageService.UploadAsync(stream, file.FileName, file.ContentType);
+
+        // Create RecipeImage record
+        var existingCount = await _db.RecipeImages.CountAsync(i => i.RecipeId == id);
+        var image = new RecipeImage
+        {
+            Id = Guid.NewGuid(),
+            RecipeId = id,
+            Url = url,
+            IsTitleImage = existingCount == 0, // First image is title
+            OrderIndex = existingCount
+        };
+
+        _db.RecipeImages.Add(image);
+        await _db.SaveChangesAsync();
+
+        var dto = new RecipeImageDto(image.Id, image.Url, image.IsTitleImage, image.OrderIndex);
+        return CreatedAtAction(nameof(GetRecipe), new { id = recipe.Id }, dto);
+    }
+
+    [HttpPatch("{id:guid}/title-image")]
+    public async Task<ActionResult<List<RecipeImageDto>>> SetTitleImage(Guid id, [FromBody] SetTitleImageRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        // Verify recipe exists and belongs to household
+        var recipe = await _db.Recipes
+            .Where(r => r.Id == id && r.HouseholdId == householdId)
+            .Include(r => r.Images)
+            .FirstOrDefaultAsync();
+
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        // Verify the image exists and belongs to this recipe
+        var targetImage = recipe.Images.FirstOrDefault(i => i.Id == request.ImageId);
+        if (targetImage == null)
+        {
+            return NotFound("Image not found");
+        }
+
+        // Clear IsTitleImage on all images and set on the specified one
+        foreach (var img in recipe.Images)
+        {
+            img.IsTitleImage = img.Id == request.ImageId;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var dtos = recipe.Images
+            .OrderBy(i => i.OrderIndex)
+            .Select(i => new RecipeImageDto(i.Id, i.Url, i.IsTitleImage, i.OrderIndex))
+            .ToList();
+
+        return Ok(dtos);
+    }
+
+    [HttpDelete("{id:guid}/images/{imageId:guid}")]
+    public async Task<IActionResult> DeleteImage(Guid id, Guid imageId)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        // Verify recipe exists and belongs to household
+        var recipe = await _db.Recipes
+            .Where(r => r.Id == id && r.HouseholdId == householdId)
+            .Include(r => r.Images)
+            .FirstOrDefaultAsync();
+
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        // Find the image to delete
+        var image = recipe.Images.FirstOrDefault(i => i.Id == imageId);
+        if (image == null)
+        {
+            return NotFound("Image not found");
+        }
+
+        // Delete from storage
+        await _storageService.DeleteAsync(image.Url);
+
+        // Remove from database
+        var wasTitleImage = image.IsTitleImage;
+        _db.RecipeImages.Remove(image);
+        await _db.SaveChangesAsync();
+
+        // If deleted image was title image and others exist, set first remaining as title
+        if (wasTitleImage)
+        {
+            var remainingImages = await _db.RecipeImages
+                .Where(i => i.RecipeId == id)
+                .OrderBy(i => i.OrderIndex)
+                .ToListAsync();
+
+            if (remainingImages.Count > 0)
+            {
+                remainingImages[0].IsTitleImage = true;
+                await _db.SaveChangesAsync();
+            }
+        }
 
         return NoContent();
     }
