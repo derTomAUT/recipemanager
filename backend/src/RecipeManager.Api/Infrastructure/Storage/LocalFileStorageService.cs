@@ -14,7 +14,8 @@ public class LocalFileStorageService : IStorageService
 
     public async Task<string> UploadAsync(Stream fileStream, string fileName, string contentType)
     {
-        var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
+        var safeFileName = Path.GetFileName(fileName);
+        var uniqueFileName = $"{Guid.NewGuid()}_{safeFileName}";
         var filePath = Path.Combine(_basePath, uniqueFileName);
 
         using var fileStreamOut = new FileStream(filePath, FileMode.Create);
