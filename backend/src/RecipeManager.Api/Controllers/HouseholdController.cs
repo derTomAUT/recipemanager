@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using RecipeManager.Api.Data;
 using RecipeManager.Api.DTOs;
 using RecipeManager.Api.Models;
+using RecipeManager.Api.Services;
 
 namespace RecipeManager.Api.Controllers;
 
@@ -172,6 +173,74 @@ public class HouseholdController : ControllerBase
         return Ok(dto);
     }
 
+    [HttpGet("settings")]
+    public async Task<ActionResult<HouseholdAiSettingsDto>> GetAiSettings()
+    {
+        var membership = await GetMembershipAsync();
+        if (membership == null)
+        {
+            return Unauthorized();
+        }
+
+        var (householdId, role) = membership.Value;
+        if (role != "Owner")
+        {
+            return Forbid();
+        }
+
+        var household = await _db.Households.FindAsync(householdId);
+        if (household == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(new HouseholdAiSettingsDto(
+            household.AiProvider,
+            household.AiModel,
+            !string.IsNullOrEmpty(household.AiApiKeyEncrypted)
+        ));
+    }
+
+    [HttpPut("settings")]
+    public async Task<ActionResult<HouseholdAiSettingsDto>> UpdateAiSettings(
+        [FromBody] UpdateHouseholdAiSettingsRequest request,
+        [FromServices] HouseholdAiSettingsService aiSettings)
+    {
+        var membership = await GetMembershipAsync();
+        if (membership == null)
+        {
+            return Unauthorized();
+        }
+
+        var (householdId, role) = membership.Value;
+        if (role != "Owner")
+        {
+            return Forbid();
+        }
+
+        var household = await _db.Households.FindAsync(householdId);
+        if (household == null)
+        {
+            return NotFound();
+        }
+
+        household.AiProvider = request.AiProvider;
+        household.AiModel = request.AiModel;
+
+        if (!string.IsNullOrWhiteSpace(request.ApiKey))
+        {
+            household.AiApiKeyEncrypted = aiSettings.Encrypt(request.ApiKey);
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new HouseholdAiSettingsDto(
+            household.AiProvider,
+            household.AiModel,
+            !string.IsNullOrEmpty(household.AiApiKeyEncrypted)
+        ));
+    }
+
     [HttpDelete("members/{targetUserId:guid}")]
     public async Task<IActionResult> RemoveMember(Guid targetUserId)
     {
@@ -225,5 +294,19 @@ public class HouseholdController : ControllerBase
             return null;
         }
         return userId;
+    }
+
+    private async Task<(Guid householdId, string role)?> GetMembershipAsync()
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return null;
+        }
+
+        var membership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == userId.Value);
+
+        return membership == null ? null : (membership.HouseholdId, membership.Role);
     }
 }
