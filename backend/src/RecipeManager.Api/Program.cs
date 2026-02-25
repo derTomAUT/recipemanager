@@ -21,6 +21,8 @@ builder.Services.AddMemoryCache();
 
 // Application services
 builder.Services.AddScoped<RecommendationService>();
+builder.Services.AddScoped<RecipeImportService>();
+builder.Services.AddHttpClient();
 
 // Auth services
 builder.Services.AddSingleton<GoogleTokenValidator>();

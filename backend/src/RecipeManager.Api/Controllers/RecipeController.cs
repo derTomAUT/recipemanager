@@ -353,6 +353,45 @@ public class RecipeController : ControllerBase
         return CreatedAtAction(nameof(GetRecipe), new { id = recipe.Id }, dto);
     }
 
+    [HttpPost("import/url")]
+    public async Task<ActionResult<RecipeDraftDto>> ImportFromUrl(
+        [FromBody] ImportRecipeUrlRequest request,
+        [FromServices] RecipeImportService importService)
+    {
+        if (string.IsNullOrWhiteSpace(request.Url))
+        {
+            return BadRequest("URL is required");
+        }
+
+        if (!Uri.TryCreate(request.Url, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return BadRequest("Invalid URL");
+        }
+
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        try
+        {
+            var draft = await importService.ImportFromUrlAsync(request.Url);
+            return Ok(draft);
+        }
+        catch
+        {
+            return StatusCode(502, "Failed to import recipe from URL");
+        }
+    }
+
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<RecipeDetailDto>> UpdateRecipe(Guid id, [FromBody] UpdateRecipeRequest request)
     {

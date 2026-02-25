@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { RecipeService } from '../../services/recipe.service';
-import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput } from '../../models/recipe.model';
+import { RecipeDraftService } from '../../services/recipe-draft.service';
+import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDraft } from '../../models/recipe.model';
 
 @Component({
   selector: 'app-recipe-editor',
@@ -24,6 +25,9 @@ import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput } from '..
       <form class="editor-form" (ngSubmit)="save()">
         <div *ngIf="loading" class="loading">Loading recipe...</div>
         <div *ngIf="error" class="error">{{ error }}</div>
+        <div *ngIf="draftWarnings.length" class="warning">
+          <div *ngFor="let warning of draftWarnings">{{ warning }}</div>
+        </div>
 
         <section class="form-section">
           <h2>Basic Info</h2>
@@ -141,6 +145,7 @@ import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput } from '..
     .upload-area { margin-top: 0.5rem; }
     .upload-area input { padding: 0.5rem; }
     .error { color: #dc3545; padding: 0.75rem; background: #f8d7da; border-radius: 4px; margin-bottom: 1rem; }
+    .warning { padding: 0.75rem; background: #fff3cd; color: #856404; border-radius: 4px; margin-bottom: 1rem; }
     .loading { text-align: center; padding: 2rem; color: #666; }
     @media (max-width: 600px) {
       .ingredient-row { flex-wrap: wrap; }
@@ -159,6 +164,7 @@ export class RecipeEditorComponent implements OnInit {
   uploading = false;
   loading = false;
   error = '';
+  draftWarnings: string[] = [];
 
   recipe: CreateRecipeRequest = {
     title: '',
@@ -180,6 +186,7 @@ export class RecipeEditorComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private recipeService: RecipeService,
+    private recipeDraftService: RecipeDraftService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -191,9 +198,30 @@ export class RecipeEditorComponent implements OnInit {
       this.loading = true;
       this.loadRecipe(this.recipeId);
     } else {
-      this.addIngredient();
-      this.addStep();
+      const draft = this.recipeDraftService.consumeDraft();
+      if (draft) {
+        this.applyDraft(draft);
+      } else {
+        this.addIngredient();
+        this.addStep();
+      }
     }
+  }
+
+  applyDraft(draft: RecipeDraft) {
+    this.recipe.title = draft.title || '';
+    this.recipe.description = draft.description || '';
+    this.recipe.servings = draft.servings;
+    this.recipe.prepMinutes = draft.prepMinutes;
+    this.recipe.cookMinutes = draft.cookMinutes;
+    this.ingredients = draft.ingredients?.length
+      ? draft.ingredients
+      : [{ name: '', quantity: '', unit: '', notes: '' }];
+    this.steps = draft.steps?.length
+      ? draft.steps
+      : [{ instruction: '', timerSeconds: undefined }];
+    this.tagsInput = (draft.tags || []).join(', ');
+    this.draftWarnings = draft.warnings || [];
   }
 
   loadRecipe(id: string) {

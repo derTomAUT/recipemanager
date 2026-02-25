@@ -4,3 +4,10 @@ GET {{RecipeManager.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+### Import recipe from URL
+POST {{RecipeManager.Api_HostAddress}}/api/recipe/import/url
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{ "url": "https://example.com/recipe" }
