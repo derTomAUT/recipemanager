@@ -22,7 +22,15 @@ public class RecommendationService
 
         if (_cache.TryGetValue<List<Recipe>>(cacheKey, out var cached))
         {
-            return cached!;
+            var existingIds = await _db.Recipes
+                .Where(r => r.HouseholdId == householdId)
+                .Select(r => r.Id)
+                .ToListAsync();
+            var existing = cached!.Where(r => existingIds.Contains(r.Id)).ToList();
+            if (existing.Count > 0)
+            {
+                return existing;
+            }
         }
 
         // Get user preferences
