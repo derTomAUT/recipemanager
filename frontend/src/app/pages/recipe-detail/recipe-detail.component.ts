@@ -13,6 +13,9 @@ import { RecipeDetail } from '../../models/recipe.model';
       <header class="sticky-header">
         <h1>{{ recipe.title }}</h1>
         <div class="header-actions">
+          <button (click)="markCooked()" [disabled]="marking" class="btn btn-success">
+            {{ marking ? 'Marking...' : 'Mark as Cooked' }}
+          </button>
           <a [routerLink]="['/recipes', recipe.id, 'edit']" class="btn">Edit</a>
           <button (click)="confirmDelete()" class="btn btn-danger">Delete</button>
         </div>
@@ -76,6 +79,8 @@ import { RecipeDetail } from '../../models/recipe.model';
     .header-actions { display: flex; gap: 0.5rem; }
     .btn { padding: 0.75rem 1rem; min-height: 44px; text-decoration: none; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; }
     .btn-danger { background: #dc3545; color: white; border-color: #dc3545; }
+    .btn-success { background: #28a745; color: white; border-color: #28a745; }
+    .btn-success:disabled { background: #6c757d; border-color: #6c757d; cursor: not-allowed; }
     .recipe-meta { margin: 1rem 0; }
     .description { color: #666; margin-bottom: 1rem; }
     .meta-row { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: #666; }
@@ -109,6 +114,7 @@ export class RecipeDetailComponent implements OnInit {
   recipe: RecipeDetail | null = null;
   loading = false;
   error = '';
+  marking = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -151,5 +157,21 @@ export class RecipeDetailComponent implements OnInit {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  }
+
+  markCooked() {
+    if (!this.recipe) return;
+    this.marking = true;
+    this.recipeService.markCooked(this.recipe.id).subscribe({
+      next: () => {
+        this.marking = false;
+        this.recipe!.cookCount++;
+        alert('Recipe marked as cooked!');
+      },
+      error: () => {
+        this.marking = false;
+        this.error = 'Failed to mark as cooked';
+      }
+    });
   }
 }

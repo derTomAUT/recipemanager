@@ -74,3 +74,14 @@ export interface StepInput {
   instruction: string;
   timerSeconds?: number;
 }
+
+export interface CookEvent {
+  id: string;
+  recipeId: string;
+  recipeTitle: string;
+  recipeImageUrl?: string;
+  userId: string;
+  userName: string;
+  cookedAt: string;
+  servings?: number;
+}

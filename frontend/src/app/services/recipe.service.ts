@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Recipe, RecipeDetail, RecipeImage, PagedResult, CreateRecipeRequest, UpdateRecipeRequest } from '../models/recipe.model';
+import { Recipe, RecipeDetail, RecipeImage, PagedResult, CreateRecipeRequest, UpdateRecipeRequest, CookEvent } from '../models/recipe.model';
 
 @Injectable({ providedIn: 'root' })
 export class RecipeService {
@@ -72,5 +72,20 @@ export class RecipeService {
 
   getRecommended(count: number = 10): Observable<Recipe[]> {
     return this.http.get<Recipe[]>(`${this.apiUrl}/recommended?count=${count}`);
+  }
+
+  markCooked(recipeId: string, servings?: number): Observable<CookEvent> {
+    return this.http.post<CookEvent>(`${this.apiUrl}/${recipeId}/cook`, { servings });
+  }
+
+  getRecipeCookHistory(recipeId: string): Observable<CookEvent[]> {
+    return this.http.get<CookEvent[]>(`${this.apiUrl}/${recipeId}/cook-history`);
+  }
+
+  getCookHistory(params: { page?: number; pageSize?: number } = {}): Observable<PagedResult<CookEvent>> {
+    let httpParams = new HttpParams();
+    if (params.page) httpParams = httpParams.set('page', params.page.toString());
+    if (params.pageSize) httpParams = httpParams.set('pageSize', params.pageSize.toString());
+    return this.http.get<PagedResult<CookEvent>>(`${environment.apiUrl}/cook-history`, { params: httpParams });
   }
 }

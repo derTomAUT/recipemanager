@@ -10,5 +10,6 @@ export const routes: Routes = [
   { path: 'recipes/new', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-editor/recipe-editor.component').then(m => m.RecipeEditorComponent) },
   { path: 'recipes/:id', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-detail/recipe-detail.component').then(m => m.RecipeDetailComponent) },
   { path: 'recipes/:id/edit', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-editor/recipe-editor.component').then(m => m.RecipeEditorComponent) },
-  { path: 'preferences', canActivate: [authGuard], loadComponent: () => import('./pages/preferences/preferences.component').then(m => m.PreferencesComponent) }
+  { path: 'preferences', canActivate: [authGuard], loadComponent: () => import('./pages/preferences/preferences.component').then(m => m.PreferencesComponent) },
+  { path: 'cook-history', canActivate: [authGuard], loadComponent: () => import('./pages/cook-history/cook-history.component').then(m => m.CookHistoryComponent) }
 ];
