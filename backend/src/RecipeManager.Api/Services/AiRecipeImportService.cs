@@ -22,16 +22,17 @@ public class AiRecipeImportService
 
     public async Task<RecipeDraftDto> ImportAsync(string provider, string model, string encryptedKey, string url)
     {
-        var apiKey = _settings.Decrypt(encryptedKey);
+        var apiKey = _settings.Decrypt(encryptedKey).Trim();
         var client = _httpClientFactory.CreateClient();
 
-        var prompt = "Extract a recipe from this URL and return a single JSON object with fields: " +
+        var prompt = "Read the following recipe website and extract the concrete recipe. Return a single JSON object with fields: " +
                      "title, description, servings, prepMinutes, cookMinutes, " +
                      "ingredients (array of { name, quantity, unit, notes }), " +
                      "steps (array of { instruction, timerSeconds }), " +
                      "tags (array of strings). " +
                      $"URL: {url}";
 
+        _logger.LogDebug("AI Import Prompt: {prompt}", prompt);
         if (provider == "OpenAI")
         {
             client.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
@@ -47,7 +48,7 @@ public class AiRecipeImportService
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = json.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
             _logger.LogDebug("AI import response (OpenAI): {Json}", content);
-            return ParseDraftFromJson(content);
+            return ParseDraftFromJson(SanitizeJson(content));
         }
 
         if (provider == "Anthropic")
@@ -66,7 +67,7 @@ public class AiRecipeImportService
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = json.GetProperty("content")[0].GetProperty("text").GetString();
             _logger.LogDebug("AI import response (Anthropic): {Json}", content);
-            return ParseDraftFromJson(content);
+            return ParseDraftFromJson(SanitizeJson(content));
         }
 
         throw new InvalidOperationException("Unsupported AI provider");
@@ -143,6 +144,34 @@ public class AiRecipeImportService
             0.6,
             new List<string> { "Imported with AI" }
         );
+    }
+
+    private static string SanitizeJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = json.Trim();
+        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+        {
+            return trimmed;
+        }
+
+        var startFenceEnd = trimmed.IndexOf('\n');
+        if (startFenceEnd < 0)
+        {
+            return trimmed;
+        }
+
+        var endFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+        if (endFence <= startFenceEnd)
+        {
+            return trimmed;
+        }
+
+        return trimmed.Substring(startFenceEnd + 1, endFence - startFenceEnd - 1).Trim();
     }
 
     private static string? GetFlexibleString(JsonElement element)

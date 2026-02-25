@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { environment } from '../../../environments/environment';
@@ -67,7 +67,7 @@ export class LogsComponent implements OnInit, OnDestroy {
   private eventSource?: EventSource;
   private buffered: string[] = [];
 
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService, private zone: NgZone) {}
 
   ngOnInit() {
     const token = this.authService.getToken();
@@ -75,24 +75,32 @@ export class LogsComponent implements OnInit, OnDestroy {
 
     this.eventSource = new EventSource(url);
     this.eventSource.onopen = () => {
-      this.connected = true;
-      this.error = '';
+      this.zone.run(() => {
+        this.connected = true;
+        this.error = '';
+      });
     };
     this.eventSource.onerror = () => {
-      this.connected = false;
-      this.error = 'Log stream disconnected. Retrying...';
+      this.zone.run(() => {
+        this.connected = false;
+        this.error = 'Log stream disconnected. Retrying...';
+      });
     };
     this.eventSource.onmessage = (event) => {
-      if (this.paused) {
-        this.buffered.push(event.data);
-        return;
-      }
-      this.appendLine(event.data);
+      this.zone.run(() => {
+        if (this.paused) {
+          this.buffered.push(event.data);
+          return;
+        }
+        this.appendLine(event.data);
+      });
     };
     this.eventSource.addEventListener('error', (event) => {
-      if ((event as MessageEvent).data) {
-        this.error = (event as MessageEvent).data;
-      }
+      this.zone.run(() => {
+        if ((event as MessageEvent).data) {
+          this.error = (event as MessageEvent).data;
+        }
+      });
     });
   }
 

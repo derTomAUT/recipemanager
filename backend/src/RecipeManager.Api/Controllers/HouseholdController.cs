@@ -227,9 +227,10 @@ public class HouseholdController : ControllerBase
         household.AiProvider = request.AiProvider;
         household.AiModel = request.AiModel;
 
-        if (!string.IsNullOrWhiteSpace(request.ApiKey))
+        var apiKey = request.ApiKey?.Trim();
+        if (!string.IsNullOrWhiteSpace(apiKey))
         {
-            household.AiApiKeyEncrypted = aiSettings.Encrypt(request.ApiKey);
+            household.AiApiKeyEncrypted = aiSettings.Encrypt(apiKey);
         }
 
         await _db.SaveChangesAsync();
