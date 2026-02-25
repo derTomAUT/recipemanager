@@ -102,7 +102,7 @@ import { RecipeDraftService } from '../../services/recipe-draft.service';
     .description { color: #666; font-size: 0.9rem; margin: 0 0 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .meta { font-size: 0.85rem; color: #888; display: flex; gap: 1rem; margin-bottom: 0.5rem; }
     .tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-    .tag { background: #e0e0e0; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
+    .tag { background: var(--surface-2); color: var(--muted); padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.75rem; }
     .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; }
     .pagination button { padding: 0.75rem 1rem; min-height: 44px; }
     .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
