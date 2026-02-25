@@ -23,6 +23,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<RecipeImportService>();
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<HouseholdAiSettingsService>();
 
 // Auth services
 builder.Services.AddSingleton<GoogleTokenValidator>();
@@ -47,6 +48,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddDataProtection();
 
 // Serilog
 Log.Logger = new LoggerConfiguration()
