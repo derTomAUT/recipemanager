@@ -350,7 +350,6 @@ export class RecipeEditorComponent implements OnInit {
     operation.subscribe({
       next: (result) => {
         this.saving = false;
-        this.cleanupTempImages();
         this.router.navigate(['/recipes', result.id]);
       },
       error: () => {
@@ -424,7 +423,9 @@ export class RecipeEditorComponent implements OnInit {
   }
 
   cleanupTempImages() {
-    const tempUrls = this.candidateImages.map(c => c.url);
+    const tempUrls = this.candidateImages
+      .filter(c => !this.isSelected(c))
+      .map(c => c.url);
     if (!tempUrls.length) return;
 
     this.recipeImportService.cleanupTempImages(tempUrls).subscribe({
