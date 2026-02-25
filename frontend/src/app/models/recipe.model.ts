@@ -63,6 +63,19 @@ export interface CreateRecipeRequest {
 
 export interface UpdateRecipeRequest extends CreateRecipeRequest {}
 
+export interface RecipeDraft {
+  title: string;
+  description?: string;
+  servings?: number;
+  prepMinutes?: number;
+  cookMinutes?: number;
+  ingredients: IngredientInput[];
+  steps: StepInput[];
+  tags: string[];
+  confidenceScore?: number;
+  warnings: string[];
+}
+
 export interface IngredientInput {
   name: string;
   quantity?: string;
