@@ -1,3 +1,4 @@
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RecipeManager.Api.Data;
@@ -25,7 +26,15 @@ public class AuthController : ControllerBase
     [HttpPost("google")]
     public async Task<ActionResult<AuthResponse>> GoogleLogin([FromBody] GoogleLoginRequest request)
     {
-        var payload = await _googleValidator.ValidateAsync(request.IdToken);
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            payload = await _googleValidator.ValidateAsync(request.IdToken);
+        }
+        catch (InvalidJwtException)
+        {
+            return Unauthorized();
+        }
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.GoogleId == payload.Subject);
 
@@ -40,8 +49,15 @@ public class AuthController : ControllerBase
                 ProfileImageUrl = payload.Picture
             };
             _db.Users.Add(user);
-            await _db.SaveChangesAsync();
         }
+        else
+        {
+            // Update profile data from Google on each login
+            user.Email = payload.Email;
+            user.Name = payload.Name;
+            user.ProfileImageUrl = payload.Picture;
+        }
+        await _db.SaveChangesAsync();
 
         // Get household membership (User doesn't have HouseholdMembers navigation, query separately)
         var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(hm => hm.UserId == user.Id);
