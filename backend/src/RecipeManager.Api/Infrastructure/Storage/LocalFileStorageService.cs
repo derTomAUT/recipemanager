@@ -1,0 +1,34 @@
+namespace RecipeManager.Api.Infrastructure.Storage;
+
+public class LocalFileStorageService : IStorageService
+{
+    private readonly string _basePath;
+    private readonly IWebHostEnvironment _env;
+
+    public LocalFileStorageService(IConfiguration config, IWebHostEnvironment env)
+    {
+        _basePath = config["Storage:LocalPath"] ?? "./uploads";
+        _env = env;
+        Directory.CreateDirectory(_basePath);
+    }
+
+    public async Task<string> UploadAsync(Stream fileStream, string fileName, string contentType)
+    {
+        var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
+        var filePath = Path.Combine(_basePath, uniqueFileName);
+
+        using var fileStreamOut = new FileStream(filePath, FileMode.Create);
+        await fileStream.CopyToAsync(fileStreamOut);
+
+        return $"/uploads/{uniqueFileName}";
+    }
+
+    public Task DeleteAsync(string url)
+    {
+        var fileName = Path.GetFileName(url);
+        var filePath = Path.Combine(_basePath, fileName);
+        if (File.Exists(filePath))
+            File.Delete(filePath);
+        return Task.CompletedTask;
+    }
+}

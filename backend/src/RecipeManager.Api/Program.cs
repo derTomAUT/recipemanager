@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using RecipeManager.Api.Data;
+using RecipeManager.Api.Infrastructure.Storage;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddSingleton<IStorageService, LocalFileStorageService>();
 
 // Serilog
 Log.Logger = new LoggerConfiguration()
@@ -27,6 +30,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
