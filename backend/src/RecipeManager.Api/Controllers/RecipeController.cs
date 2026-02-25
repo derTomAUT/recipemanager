@@ -331,12 +331,13 @@ public class RecipeController : ControllerBase
             }
         }
 
-        // Add imported images (only allow stored uploads)
+        // Add imported images (allow stored uploads and temp uploads)
+        var keptTempUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (request.ImportedImages != null)
         {
             foreach (var image in request.ImportedImages.OrderBy(i => i.OrderIndex))
             {
-                if (!IsStoredImageUrl(image.Url)) continue;
+                if (!(IsStoredImageUrl(image.Url) || IsTempImageUrl(image.Url))) continue;
 
                 recipe.Images.Add(new RecipeImage
                 {
@@ -346,11 +347,33 @@ public class RecipeController : ControllerBase
                     IsTitleImage = image.IsTitleImage,
                     OrderIndex = image.OrderIndex
                 });
+
+                if (IsTempImageUrl(image.Url))
+                {
+                    keptTempUrls.Add(image.Url);
+                }
             }
         }
 
         _db.Recipes.Add(recipe);
         await _db.SaveChangesAsync();
+
+        // Cleanup temp images that were not kept
+        if (request.ImportedImages != null)
+        {
+            var tempImages = request.ImportedImages
+                .Where(i => IsTempImageUrl(i.Url))
+                .Select(i => i.Url)
+                .ToList();
+
+            foreach (var tempUrl in tempImages)
+            {
+                if (!keptTempUrls.Contains(tempUrl))
+                {
+                    await _storageService.DeleteAsync(tempUrl);
+                }
+            }
+        }
 
         var dto = new RecipeDetailDto(
             recipe.Id,
@@ -975,5 +998,10 @@ public class RecipeController : ControllerBase
     private static bool IsStoredImageUrl(string url)
     {
         return url.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTempImageUrl(string url)
+    {
+        return url.StartsWith("/uploads/temp_", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -13,4 +13,8 @@ export class RecipeImportService {
   importFromUrl(url: string): Observable<RecipeDraft> {
     return this.http.post<RecipeDraft>(this.apiUrl, { url });
   }
+
+  cleanupTempImages(tempUrls: string[]): Observable<void> {
+    return this.http.post<void>(`${environment.apiUrl}/import/cleanup`, { tempUrls });
+  }
 }

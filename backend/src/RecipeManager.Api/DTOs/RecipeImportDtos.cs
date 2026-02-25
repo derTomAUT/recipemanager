@@ -8,6 +8,12 @@ public record ImportedImageDto(
     int OrderIndex
 );
 
+public record CandidateImageDto(
+    string Url,
+    bool IsHeroCandidate,
+    int OrderIndex
+);
+
 public record RecipeDraftDto(
     string Title,
     string? Description,
@@ -18,6 +24,7 @@ public record RecipeDraftDto(
     List<StepDto> Steps,
     List<string> Tags,
     List<ImportedImageDto> ImportedImages,
+    List<CandidateImageDto> CandidateImages,
     double? ConfidenceScore,
     List<string> Warnings
 );

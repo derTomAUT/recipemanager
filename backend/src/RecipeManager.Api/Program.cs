@@ -91,6 +91,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+var uploadsPath = builder.Configuration["Storage:LocalPath"] ?? "./uploads";
+var uploadsRoot = Path.IsPathRooted(uploadsPath)
+    ? uploadsPath
+    : Path.Combine(app.Environment.ContentRootPath, uploadsPath);
 
 if (app.Environment.IsDevelopment())
 {
@@ -120,7 +124,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles(); // For wwwroot
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "uploads")),
+    FileProvider = new PhysicalFileProvider(uploadsRoot),
     RequestPath = "/uploads"
 });
 app.UseAuthentication();

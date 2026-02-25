@@ -4,7 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { RecipeService } from '../../services/recipe.service';
 import { RecipeDraftService } from '../../services/recipe-draft.service';
-import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDraft, ImportedImageInput } from '../../models/recipe.model';
+import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDraft, ImportedImageInput, CandidateImageInput } from '../../models/recipe.model';
+import { resolveImageUrl } from '../../utils/url.utils';
+import { RecipeImportService } from '../../services/recipe-import.service';
 
 @Component({
   selector: 'app-recipe-editor',
@@ -86,6 +88,23 @@ import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDra
           <button type="button" (click)="addStep()" class="btn btn-add">+ Add Step</button>
         </section>
 
+        <section class="form-section" *ngIf="candidateImages.length">
+          <h2>Imported Images</h2>
+          <p class="helper-text">Select the hero image and keep any step images you want to save.</p>
+          <div class="image-grid">
+            <div *ngFor="let img of candidateImages" class="image-item" [class.title-image]="img.isHeroCandidate">
+              <img [src]="img.url" [alt]="recipe.title" />
+              <div class="image-actions">
+                <button type="button" (click)="setHeroCandidate(img)" class="btn-small">Set as Hero</button>
+                <button type="button" (click)="toggleCandidate(img)" class="btn-small" [class.active]="isSelected(img)">
+                  {{ isSelected(img) ? 'Selected' : 'Select' }}
+                </button>
+              </div>
+              <span *ngIf="img.isHeroCandidate" class="title-badge">Hero</span>
+            </div>
+          </div>
+        </section>
+
         <section class="form-section" *ngIf="isEdit && recipeId">
           <h2>Images</h2>
           <div class="image-grid">
@@ -140,7 +159,9 @@ import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDra
     .image-item { position: relative; width: 150px; }
     .image-item img { width: 100%; height: 100px; object-fit: cover; border-radius: 4px; }
     .image-item.title-image { border: 3px solid #007bff; border-radius: 4px; }
-    .image-actions { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
+    .image-actions { display: flex; gap: 0.25rem; margin-top: 0.25rem; flex-wrap: wrap; }
+    .btn-small.active { background: #007bff; color: white; border-color: #007bff; }
+    .helper-text { margin: 0 0 0.75rem; color: #666; }
     .title-badge { position: absolute; top: 4px; left: 4px; background: #007bff; color: white; padding: 0.125rem 0.25rem; font-size: 0.7rem; border-radius: 2px; }
     .upload-area { margin-top: 0.5rem; }
     .upload-area input { padding: 0.5rem; }
@@ -182,12 +203,15 @@ export class RecipeEditorComponent implements OnInit {
   images: RecipeImage[] = [];
   tagsInput = '';
   importedImages: ImportedImageInput[] = [];
+  candidateImages: CandidateImageInput[] = [];
+  selectedCandidateUrls = new Set<string>();
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private recipeService: RecipeService,
     private recipeDraftService: RecipeDraftService,
+    private recipeImportService: RecipeImportService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -223,6 +247,13 @@ export class RecipeEditorComponent implements OnInit {
       : [{ instruction: '', timerSeconds: undefined }];
     this.tagsInput = (draft.tags || []).join(', ');
     this.importedImages = draft.importedImages ?? [];
+    this.candidateImages = (draft.candidateImages ?? []).map(img => ({
+      ...img,
+      url: resolveImageUrl(img.url) ?? img.url
+    }));
+    this.selectedCandidateUrls = new Set(
+      this.candidateImages.filter(c => c.isHeroCandidate).map(c => c.url)
+    );
     this.draftWarnings = draft.warnings || [];
   }
 
@@ -299,13 +330,14 @@ export class RecipeEditorComponent implements OnInit {
 
     const tags = this.tagsInput.split(',').map(t => t.trim()).filter(t => t);
 
+    const selectedImages = this.buildSelectedImages();
     const request: CreateRecipeRequest = {
       ...this.recipe,
       title: this.recipe.title.trim(),
       ingredients: validIngredients,
       steps: validSteps,
       tags,
-      importedImages: this.importedImages
+      importedImages: selectedImages.length ? selectedImages : this.importedImages
     };
 
     this.saving = true;
@@ -318,6 +350,7 @@ export class RecipeEditorComponent implements OnInit {
     operation.subscribe({
       next: (result) => {
         this.saving = false;
+        this.cleanupTempImages();
         this.router.navigate(['/recipes', result.id]);
       },
       error: () => {
@@ -329,11 +362,75 @@ export class RecipeEditorComponent implements OnInit {
   }
 
   cancel() {
+    this.cleanupTempImages();
     if (this.isEdit && this.recipeId) {
       this.router.navigate(['/recipes', this.recipeId]);
     } else {
       this.router.navigate(['/recipes']);
     }
+  }
+
+  setHeroCandidate(image: CandidateImageInput) {
+    this.candidateImages = this.candidateImages.map(c => ({
+      ...c,
+      isHeroCandidate: c.url === image.url
+    }));
+    this.selectedCandidateUrls.add(image.url);
+  }
+
+  toggleCandidate(image: CandidateImageInput) {
+    if (this.selectedCandidateUrls.has(image.url)) {
+      this.selectedCandidateUrls.delete(image.url);
+    } else {
+      this.selectedCandidateUrls.add(image.url);
+    }
+  }
+
+  isSelected(image: CandidateImageInput): boolean {
+    return this.selectedCandidateUrls.has(image.url);
+  }
+
+  buildSelectedImages(): ImportedImageInput[] {
+    if (!this.candidateImages.length) return [];
+
+    const hero = this.candidateImages.find(c => c.isHeroCandidate);
+    const selected = this.candidateImages
+      .filter(c => this.selectedCandidateUrls.has(c.url) || c.isHeroCandidate)
+      .sort((a, b) => a.orderIndex - b.orderIndex);
+
+    const ordered = [];
+    let orderIndex = 0;
+
+    if (hero) {
+      ordered.push({
+        url: hero.url,
+        isTitleImage: true,
+        orderIndex: 0
+      });
+      orderIndex = 1;
+    }
+
+    for (const candidate of selected) {
+      if (hero && candidate.url === hero.url) continue;
+      ordered.push({
+        url: candidate.url,
+        isTitleImage: false,
+        orderIndex
+      });
+      orderIndex++;
+    }
+
+    return ordered;
+  }
+
+  cleanupTempImages() {
+    const tempUrls = this.candidateImages.map(c => c.url);
+    if (!tempUrls.length) return;
+
+    this.recipeImportService.cleanupTempImages(tempUrls).subscribe({
+      next: () => {},
+      error: () => {}
+    });
   }
 
   onFileSelect(event: Event) {

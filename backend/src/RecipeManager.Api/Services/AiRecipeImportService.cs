@@ -255,6 +255,7 @@ public class AiRecipeImportService
             steps,
             tags,
             new List<ImportedImageDto>(),
+            new List<CandidateImageDto>(),
             0.6,
             new List<string> { "Imported with AI" }
         );

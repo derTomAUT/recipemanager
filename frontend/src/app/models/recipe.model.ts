@@ -74,6 +74,7 @@ export interface RecipeDraft {
   steps: StepInput[];
   tags: string[];
   importedImages?: ImportedImageInput[];
+  candidateImages?: CandidateImageInput[];
   confidenceScore?: number;
   warnings: string[];
 }
@@ -93,6 +94,12 @@ export interface StepInput {
 export interface ImportedImageInput {
   url: string;
   isTitleImage: boolean;
+  orderIndex: number;
+}
+
+export interface CandidateImageInput {
+  url: string;
+  isHeroCandidate: boolean;
   orderIndex: number;
 }
 

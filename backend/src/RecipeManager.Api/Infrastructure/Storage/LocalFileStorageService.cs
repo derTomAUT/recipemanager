@@ -7,8 +7,11 @@ public class LocalFileStorageService : IStorageService
 
     public LocalFileStorageService(IConfiguration config, IWebHostEnvironment env)
     {
-        _basePath = config["Storage:LocalPath"] ?? "./uploads";
+        var configuredPath = config["Storage:LocalPath"] ?? "./uploads";
         _env = env;
+        _basePath = Path.IsPathRooted(configuredPath)
+            ? configuredPath
+            : Path.Combine(_env.ContentRootPath, configuredPath);
         Directory.CreateDirectory(_basePath);
     }
 

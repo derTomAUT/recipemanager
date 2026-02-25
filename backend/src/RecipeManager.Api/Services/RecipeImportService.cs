@@ -70,10 +70,14 @@ public class RecipeImportService
 
         if (HasAiSettings(household))
         {
-            var importedImages = await TryImportImagesAsync(url, html, draft, household);
-            if (importedImages.Count > 0)
+            var imageResult = await TryImportImagesAsync(url, html, draft, household);
+            if (imageResult.ImportedImages.Count > 0 || imageResult.CandidateImages.Count > 0)
             {
-                return draft with { ImportedImages = importedImages };
+                return draft with
+                {
+                    ImportedImages = imageResult.ImportedImages,
+                    CandidateImages = imageResult.CandidateImages
+                };
             }
         }
 
@@ -147,6 +151,7 @@ public class RecipeImportService
                     steps,
                     tags,
                     new List<ImportedImageDto>(),
+                    new List<CandidateImageDto>(),
                     null,
                     new List<string>()
                 );
@@ -316,6 +321,7 @@ public class RecipeImportService
             steps,
             new List<string>(),
             new List<ImportedImageDto>(),
+            new List<CandidateImageDto>(),
             null,
             new List<string>()
         );
@@ -433,7 +439,7 @@ public class RecipeImportService
         }
     }
 
-    private async Task<List<ImportedImageDto>> TryImportImagesAsync(
+    private async Task<ImageImportResult> TryImportImagesAsync(
         string url,
         string html,
         RecipeDraftDto draft,
@@ -443,10 +449,10 @@ public class RecipeImportService
         {
             var baseUri = new Uri(url);
             var candidates = ExtractImageCandidates(html, baseUri);
-            if (candidates.Count == 0) return new List<ImportedImageDto>();
+            if (candidates.Count == 0) return new ImageImportResult();
 
             var fetched = await _imageFetchService.FetchImagesAsync(candidates, maxImages: 20);
-            if (fetched.Count == 0) return new List<ImportedImageDto>();
+            if (fetched.Count == 0) return new ImageImportResult();
 
             AiImageSelection? selection = null;
             if (HasAiSettings(household))
@@ -467,11 +473,12 @@ public class RecipeImportService
             }
 
             var selected = SelectImagesFromResult(selection, fetched);
-            return await StoreSelectedImagesAsync(selected);
+            var candidatesStored = await StoreCandidateImagesAsync(selected, fetched);
+            return new ImageImportResult(new List<ImportedImageDto>(), candidatesStored);
         }
         catch
         {
-            return new List<ImportedImageDto>();
+            return new ImageImportResult();
         }
     }
 
@@ -525,6 +532,30 @@ public class RecipeImportService
         return result;
     }
 
+    private async Task<List<CandidateImageDto>> StoreCandidateImagesAsync(
+        List<SelectedImage> selected,
+        List<FetchedImage> fetched)
+    {
+        var selectedUrlSet = selected.Select(s => s.Image.Url).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selectedOrderMap = selected.ToDictionary(s => s.Image.Url, s => s.OrderIndex, StringComparer.OrdinalIgnoreCase);
+        var result = new List<CandidateImageDto>();
+        var order = 0;
+
+        foreach (var image in fetched)
+        {
+            var fileName = BuildTempFileName(image.Url, image.ContentType);
+            await using var stream = new MemoryStream(image.Bytes);
+            var storedUrl = await _storageService.UploadAsync(stream, fileName, image.ContentType);
+            result.Add(new CandidateImageDto(
+                storedUrl,
+                selectedUrlSet.Contains(image.Url),
+                selectedOrderMap.TryGetValue(image.Url, out var selectedOrder) ? selectedOrder : order));
+            order++;
+        }
+
+        return result;
+    }
+
     private static string BuildFileName(string url, string contentType)
     {
         var fileName = Path.GetFileName(new Uri(url).AbsolutePath);
@@ -549,5 +580,18 @@ public class RecipeImportService
         return fileName;
     }
 
+    private static string BuildTempFileName(string url, string contentType)
+    {
+        var fileName = BuildFileName(url, contentType);
+        return $"temp_{fileName}";
+    }
+
     private record SelectedImage(FetchedImage Image, bool IsTitleImage, int OrderIndex);
+
+    private record ImageImportResult(
+        List<ImportedImageDto> ImportedImages,
+        List<CandidateImageDto> CandidateImages)
+    {
+        public ImageImportResult() : this(new List<ImportedImageDto>(), new List<CandidateImageDto>()) { }
+    }
 }
