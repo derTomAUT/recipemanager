@@ -41,6 +41,10 @@ public class RecipeController : ControllerBase
 
         var (householdId, _) = membership.Value;
 
+        // Clamp pageSize to reasonable bounds
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         // Build the base query
         var query = _db.Recipes
             .Where(r => r.HouseholdId == householdId)
