@@ -59,6 +59,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+app.UseDefaultFiles();
 app.UseStaticFiles(); // For wwwroot
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -69,5 +70,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+app.MapFallbackToFile("index.html");
 
 app.Run();
