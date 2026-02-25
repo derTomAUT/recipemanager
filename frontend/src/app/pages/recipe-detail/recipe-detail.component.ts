@@ -13,10 +13,10 @@ import { RecipeDetail } from '../../models/recipe.model';
       <header class="sticky-header">
         <h1>{{ recipe.title }}</h1>
         <div class="header-actions">
-          <button (click)="markCooked()" [disabled]="marking" class="btn btn-success">
+          <button (click)="markCooked()" [disabled]="marking" class="btn btn-primary">
             {{ marking ? 'Marking...' : 'Mark as Cooked' }}
           </button>
-          <a [routerLink]="['/recipes', recipe.id, 'edit']" class="btn">Edit</a>
+          <a [routerLink]="['/recipes', recipe.id, 'edit']" class="btn btn-secondary">Edit</a>
           <button (click)="confirmDelete()" class="btn btn-danger">Delete</button>
         </div>
       </header>
@@ -78,38 +78,36 @@ import { RecipeDetail } from '../../models/recipe.model';
   `,
   styles: [`
     .recipe-detail-page { padding: 1rem; max-width: 800px; margin: 0 auto; }
-    .sticky-header { position: sticky; top: 0; background: white; padding: 1rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; z-index: 10; }
+    .sticky-header { position: sticky; top: 0; background: var(--bg); padding: 1rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.1); z-index: 10; }
     .sticky-header h1 { margin: 0; font-size: 1.5rem; }
     .header-actions { display: flex; gap: 0.5rem; }
-    .btn { padding: 0.75rem 1rem; min-height: 44px; text-decoration: none; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; }
-    .btn-danger { background: #dc3545; color: white; border-color: #dc3545; }
-    .btn-success { background: #28a745; color: white; border-color: #28a745; }
-    .btn-success:disabled { background: #6c757d; border-color: #6c757d; cursor: not-allowed; }
+    .btn-danger { background: #d23f3f; color: white; }
+    .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
     .recipe-meta { margin: 1rem 0; }
-    .description { color: #666; margin-bottom: 1rem; }
-    .meta-row { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: #666; }
+    .description { color: var(--muted); margin-bottom: 1rem; }
+    .meta-row { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: var(--muted); }
     .tags { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
-    .tag { background: #e0e0e0; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+    .tag { background: var(--surface-2); padding: 0.25rem 0.5rem; border-radius: 999px; font-size: 0.85rem; color: var(--muted); }
     .images { margin: 1rem 0; }
     .image-gallery { display: flex; gap: 0.5rem; overflow-x: auto; }
     .image-gallery img { max-height: 300px; border-radius: 8px; }
     .ingredients, .steps { margin: 1.5rem 0; }
     .ingredients h2, .steps h2 { font-size: 1.25rem; margin-bottom: 1rem; }
     .ingredient-list { list-style: none; padding: 0; }
-    .ingredient-list li { padding: 0.5rem 0; border-bottom: 1px solid #eee; display: flex; gap: 0.5rem; }
+    .ingredient-list li { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); display: flex; gap: 0.5rem; }
     .quantity { font-weight: 500; min-width: 80px; }
-    .notes { color: #888; font-size: 0.9rem; }
+    .notes { color: var(--muted); font-size: 0.9rem; }
     .step-list { list-style: none; padding: 0; counter-reset: step; }
-    .step { display: flex; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid #eee; }
-    .step-number { width: 32px; height: 32px; border-radius: 50%; background: #007bff; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+    .step { display: flex; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .step-number { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
     .step-content { flex: 1; }
     .step-content p { margin: 0; font-size: 1.1rem; line-height: 1.6; }
-    .timer { color: #007bff; font-size: 0.9rem; margin-top: 0.5rem; display: inline-block; }
-    .back-link { display: inline-block; margin-top: 2rem; color: #007bff; }
+    .timer { color: var(--primary); font-size: 0.9rem; margin-top: 0.5rem; display: inline-block; }
+    .back-link { display: inline-block; margin-top: 2rem; color: var(--primary); }
     .loading { text-align: center; padding: 2rem; }
-    .error { color: #dc3545; text-align: center; padding: 1rem; background: #f8d7da; border-radius: 4px; }
-    .not-found { text-align: center; padding: 2rem; color: #666; }
-    .not-found a { color: #007bff; }
+    .error { color: var(--text); text-align: center; padding: 1rem; background: rgba(217,80,47,0.15); border-radius: 4px; }
+    .not-found { text-align: center; padding: 2rem; color: var(--muted); }
+    .not-found a { color: var(--primary); }
     @media (max-width: 600px) {
       .sticky-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
       .step-content p { font-size: 1rem; }
