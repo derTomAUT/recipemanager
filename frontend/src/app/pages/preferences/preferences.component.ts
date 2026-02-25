@@ -87,13 +87,13 @@ import { UserPreferences } from '../../models/preference.model';
     .hint { color: #666; font-size: 0.875rem; margin: 0 0 1rem; }
     .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; min-height: 32px; }
     .chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; border-radius: 16px; font-size: 0.875rem; }
-    .chip button { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 0 0.25rem; opacity: 0.7; }
+    .chip button { background: none; border: none; cursor: pointer; font-size: 1.25rem; padding: 0.25rem; min-width: 32px; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.7; }
     .chip button:hover { opacity: 1; }
     .chip-red { background: #f8d7da; color: #721c24; }
     .chip-yellow { background: #fff3cd; color: #856404; }
     .chip-blue { background: #cce5ff; color: #004085; }
     .add-input { display: flex; gap: 0.5rem; }
-    .add-input input { flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
+    .add-input input { flex: 1; padding: 0.5rem; min-height: 44px; border: 1px solid #ddd; border-radius: 4px; }
     .add-input button { padding: 0.5rem 1rem; min-height: 44px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; }
     .form-actions { margin-top: 1.5rem; }
     .loading, .error, .success { padding: 1rem; border-radius: 4px; margin-bottom: 1rem; text-align: center; }

@@ -69,14 +69,14 @@ import { Recipe, PagedResult } from '../../models/recipe.model';
   styles: [`
     .recipe-list-page { padding: 1rem; max-width: 1200px; margin: 0 auto; }
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    .btn-primary { background: #007bff; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; }
+    .btn-primary { background: #007bff; color: white; padding: 0.5rem 1rem; min-height: 44px; display: inline-flex; align-items: center; text-decoration: none; border-radius: 4px; }
     .search-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    .search-bar input { flex: 1; padding: 0.5rem; font-size: 1rem; }
+    .search-bar input { flex: 1; padding: 0.5rem; font-size: 1rem; min-height: 44px; }
     .search-bar button { padding: 0.75rem 1rem; min-height: 44px; }
     .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
     .recipe-card { position: relative; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
     .recipe-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .favorite-btn { position: absolute; top: 8px; right: 8px; background: white; border: none; border-radius: 50%; width: 36px; height: 36px; font-size: 1.25rem; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1; color: #ccc; }
+    .favorite-btn { position: absolute; top: 8px; right: 8px; background: white; border: none; border-radius: 50%; width: 44px; height: 44px; font-size: 1.25rem; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1; color: #ccc; }
     .favorite-btn.favorited { color: #dc3545; }
     .recipe-image img { width: 100%; height: 180px; object-fit: cover; }
     .no-image { width: 100%; height: 180px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #999; }
