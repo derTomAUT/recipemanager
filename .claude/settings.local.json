@@ -1,7 +1,17 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(dotnet:*)",
+      "Bash(cd D:\\\\Development\\\\recipemanager:*)",
+      "Bash(docker:*)",
+      "Bash(cd D:/Development/recipemanager/frontend && npm run build 2>&1)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "Bash(echo Already a git repo or init failed:*)",
+      "Bash(cd \"D:/Development/recipemanager\" && git status 2>&1 || git init 2>&1)",
+      "Bash(true:*)",
+      "Bash(grep:*)"
     ]
   }
 }

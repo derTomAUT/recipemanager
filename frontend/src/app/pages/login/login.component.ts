@@ -1,7 +1,10 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, AfterViewInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
+import { environment } from '../../../environments/environment';
+
+declare const google: any;
 
 @Component({
   selector: 'app-login',
@@ -11,12 +14,7 @@ import { AuthService } from '../../services/auth.service';
     <div class="login-container">
       <h1>Recipe Manager</h1>
       <div *ngIf="error" class="error">{{ error }}</div>
-      <div id="g_id_onload"
-           data-client_id="YOUR_GOOGLE_CLIENT_ID"
-           data-callback="handleGoogleLogin">
-      </div>
-      <div class="g_id_signin" data-type="standard"></div>
-      <p class="note">Note: Configure Google Client ID in index.html</p>
+      <div id="g_id_signin"></div>
     </div>
   `,
   styles: [`
@@ -32,20 +30,40 @@ import { AuthService } from '../../services/auth.service';
     .error { color: #dc3545; padding: 0.5rem 1rem; background: #f8d7da; border-radius: 4px; }
   `]
 })
-export class LoginComponent implements OnDestroy {
+export class LoginComponent implements AfterViewInit, OnDestroy {
   error = '';
 
-  constructor(private auth: AuthService, private router: Router) {
-    (window as any).handleGoogleLogin = (response: any) => {
-      this.error = '';
-      this.auth.googleLogin(response.credential).subscribe({
-        next: () => this.router.navigate(['/']),
-        error: () => this.error = 'Login failed. Please try again.'
-      });
-    };
+  constructor(private auth: AuthService, private router: Router) {}
+
+  ngAfterViewInit() {
+    this.initGoogleSignIn();
   }
 
-  ngOnDestroy() {
-    delete (window as any).handleGoogleLogin;
+  private initGoogleSignIn() {
+    if (typeof google === 'undefined') {
+      // Wait for Google script to load
+      setTimeout(() => this.initGoogleSignIn(), 100);
+      return;
+    }
+
+    google.accounts.id.initialize({
+      client_id: environment.googleClientId,
+      callback: (response: any) => this.handleGoogleLogin(response)
+    });
+
+    google.accounts.id.renderButton(
+      document.getElementById('g_id_signin'),
+      { theme: 'outline', size: 'large', width: 280 }
+    );
   }
+
+  private handleGoogleLogin(response: any) {
+    this.error = '';
+    this.auth.googleLogin(response.credential).subscribe({
+      next: () => this.router.navigate(['/']),
+      error: () => this.error = 'Login failed. Please try again.'
+    });
+  }
+
+  ngOnDestroy() {}
 }

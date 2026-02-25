@@ -52,6 +52,18 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 builder.Host.UseSerilog();
 
+// CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
+});
+
 // Services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -65,7 +77,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles(); // For wwwroot
 app.UseStaticFiles(new StaticFileOptions

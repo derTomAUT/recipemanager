@@ -11,7 +11,7 @@ using RecipeManager.Api.Services;
 namespace RecipeManager.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/recipes")]
 [Authorize]
 public class RecipeController : ControllerBase
 {

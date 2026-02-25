@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { environment } from '../../../environments/environment';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-household-setup',
@@ -42,13 +43,17 @@ export class HouseholdSetupComponent {
   inviteCode = '';
   error = '';
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(
+    private http: HttpClient,
+    private router: Router,
+    private authService: AuthService
+  ) {}
 
   create() {
     this.error = '';
     this.http.post(`${environment.apiUrl}/household`, { name: this.householdName })
       .subscribe({
-        next: () => location.reload(),
+        next: () => this.onHouseholdCreated(),
         error: () => this.error = 'Failed to create household. Please try again.'
       });
   }
@@ -57,8 +62,15 @@ export class HouseholdSetupComponent {
     this.error = '';
     this.http.post(`${environment.apiUrl}/household/join`, { inviteCode: this.inviteCode })
       .subscribe({
-        next: () => location.reload(),
+        next: () => this.onHouseholdCreated(),
         error: () => this.error = 'Failed to join household. Check the invite code and try again.'
       });
+  }
+
+  private onHouseholdCreated() {
+    this.authService.refreshToken().subscribe({
+      next: () => this.router.navigate(['/home']),
+      error: () => this.error = 'Household created, but failed to refresh session. Please log in again.'
+    });
   }
 }

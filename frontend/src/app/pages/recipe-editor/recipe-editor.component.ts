@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
@@ -179,7 +179,8 @@ export class RecipeEditorComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private recipeService: RecipeService
+    private recipeService: RecipeService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -221,10 +222,12 @@ export class RecipeEditorComponent implements OnInit {
         this.images = data.images;
         this.tagsInput = data.tags.join(', ');
         this.loading = false;
+        this.cdr.detectChanges();
       },
       error: () => {
         this.error = 'Failed to load recipe';
         this.loading = false;
+        this.cdr.detectChanges();
       }
     });
   }
@@ -289,6 +292,7 @@ export class RecipeEditorComponent implements OnInit {
       error: () => {
         this.saving = false;
         this.error = 'Failed to save recipe';
+        this.cdr.detectChanges();
       }
     });
   }
@@ -313,10 +317,12 @@ export class RecipeEditorComponent implements OnInit {
         this.images.push(image);
         this.uploading = false;
         input.value = '';
+        this.cdr.detectChanges();
       },
       error: () => {
         this.error = 'Failed to upload image';
         this.uploading = false;
+        this.cdr.detectChanges();
       }
     });
   }
@@ -324,8 +330,14 @@ export class RecipeEditorComponent implements OnInit {
   setAsTitleImage(imageId: string) {
     if (!this.recipeId) return;
     this.recipeService.setTitleImage(this.recipeId, imageId).subscribe({
-      next: (images) => this.images = images,
-      error: () => this.error = 'Failed to set title image'
+      next: (images) => {
+        this.images = images;
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.error = 'Failed to set title image';
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -336,8 +348,12 @@ export class RecipeEditorComponent implements OnInit {
     this.recipeService.deleteImage(this.recipeId, imageId).subscribe({
       next: () => {
         this.images = this.images.filter(i => i.id !== imageId);
+        this.cdr.detectChanges();
       },
-      error: () => this.error = 'Failed to delete image'
+      error: () => {
+        this.error = 'Failed to delete image';
+        this.cdr.detectChanges();
+      }
     });
   }
 }

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -104,7 +104,7 @@ export class RecipeListComponent implements OnInit {
   pageSize = 20;
   favoriteIds: Set<string> = new Set();
 
-  constructor(private recipeService: RecipeService) {}
+  constructor(private recipeService: RecipeService, private cdr: ChangeDetectorRef) {}
 
   ngOnInit() {
     this.loadRecipes();
@@ -121,11 +121,13 @@ export class RecipeListComponent implements OnInit {
       next: (data) => {
         this.result = data;
         this.loading = false;
+        this.cdr.detectChanges();
         this.loadFavorites();
       },
       error: () => {
         this.error = 'Failed to load recipes';
         this.loading = false;
+        this.cdr.detectChanges();
       }
     });
   }
@@ -148,6 +150,7 @@ export class RecipeListComponent implements OnInit {
     this.recipeService.getFavorites({ pageSize: 100 }).subscribe({
       next: (data) => {
         this.favoriteIds = new Set(data.items.map(r => r.id));
+        this.cdr.detectChanges();
       }
     });
   }
@@ -160,13 +163,25 @@ export class RecipeListComponent implements OnInit {
     event.stopPropagation();
     if (this.favoriteIds.has(id)) {
       this.recipeService.removeFavorite(id).subscribe({
-        next: () => this.favoriteIds.delete(id),
-        error: () => this.error = 'Failed to update favorite'
+        next: () => {
+          this.favoriteIds.delete(id);
+          this.cdr.detectChanges();
+        },
+        error: () => {
+          this.error = 'Failed to update favorite';
+          this.cdr.detectChanges();
+        }
       });
     } else {
       this.recipeService.addFavorite(id).subscribe({
-        next: () => this.favoriteIds.add(id),
-        error: () => this.error = 'Failed to update favorite'
+        next: () => {
+          this.favoriteIds.add(id);
+          this.cdr.detectChanges();
+        },
+        error: () => {
+          this.error = 'Failed to update favorite';
+          this.cdr.detectChanges();
+        }
       });
     }
   }

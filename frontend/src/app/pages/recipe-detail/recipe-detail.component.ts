@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { RecipeService } from '../../services/recipe.service';
@@ -71,6 +71,10 @@ import { RecipeDetail } from '../../models/recipe.model';
 
     <div *ngIf="loading" class="loading">Loading recipe...</div>
     <div *ngIf="error" class="error">{{ error }}</div>
+    <div *ngIf="!recipe && !loading && !error" class="not-found">
+      <p>Recipe not found.</p>
+      <a routerLink="/recipes">Back to Recipes</a>
+    </div>
   `,
   styles: [`
     .recipe-detail-page { padding: 1rem; max-width: 800px; margin: 0 auto; }
@@ -104,6 +108,8 @@ import { RecipeDetail } from '../../models/recipe.model';
     .back-link { display: inline-block; margin-top: 2rem; color: #007bff; }
     .loading { text-align: center; padding: 2rem; }
     .error { color: #dc3545; text-align: center; padding: 1rem; background: #f8d7da; border-radius: 4px; }
+    .not-found { text-align: center; padding: 2rem; color: #666; }
+    .not-found a { color: #007bff; }
     @media (max-width: 600px) {
       .sticky-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
       .step-content p { font-size: 1rem; }
@@ -119,26 +125,38 @@ export class RecipeDetailComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private recipeService: RecipeService
+    private recipeService: RecipeService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
       this.loadRecipe(id);
+    } else {
+      this.error = 'No recipe ID provided';
     }
   }
 
   loadRecipe(id: string) {
     this.loading = true;
+    this.error = '';
     this.recipeService.getRecipe(id).subscribe({
       next: (recipe) => {
         this.recipe = recipe;
         this.loading = false;
+        this.cdr.detectChanges();
       },
-      error: () => {
-        this.error = 'Failed to load recipe';
+      error: (err) => {
+        if (err.status === 404) {
+          this.error = 'Recipe not found';
+        } else if (err.status === 401) {
+          this.error = 'Please log in again';
+        } else {
+          this.error = 'Failed to load recipe. Please try again.';
+        }
         this.loading = false;
+        this.cdr.detectChanges();
       }
     });
   }

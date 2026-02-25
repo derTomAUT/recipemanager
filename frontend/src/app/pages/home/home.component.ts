@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { RecipeService } from '../../services/recipe.service';
@@ -72,7 +72,7 @@ export class HomeComponent implements OnInit {
   loading = false;
   error = '';
 
-  constructor(private recipeService: RecipeService) {}
+  constructor(private recipeService: RecipeService, private cdr: ChangeDetectorRef) {}
 
   ngOnInit() {
     this.loadRecommendations();
@@ -84,10 +84,12 @@ export class HomeComponent implements OnInit {
       next: (data) => {
         this.recommended = data;
         this.loading = false;
+        this.cdr.detectChanges();
       },
       error: () => {
         this.error = 'Failed to load recommendations';
         this.loading = false;
+        this.cdr.detectChanges();
       }
     });
   }

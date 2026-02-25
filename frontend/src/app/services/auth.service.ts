@@ -27,11 +27,18 @@ export class AuthService {
 
   googleLogin(idToken: string): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/google`, { idToken })
-      .pipe(tap(res => {
-        localStorage.setItem(this.tokenKey, res.token);
-        localStorage.setItem('user', JSON.stringify(res.user));
-        this.userSubject.next(res.user);
-      }));
+      .pipe(tap(res => this.storeAuth(res)));
+  }
+
+  refreshToken(): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/refresh`, {})
+      .pipe(tap(res => this.storeAuth(res)));
+  }
+
+  private storeAuth(res: AuthResponse) {
+    localStorage.setItem(this.tokenKey, res.token);
+    localStorage.setItem('user', JSON.stringify(res.user));
+    this.userSubject.next(res.user);
   }
 
   logout() {
