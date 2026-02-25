@@ -1,1 +1,120 @@
-/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=General+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --font-display: 'Fraunces', serif;
+  --font-body: 'General Sans', system-ui, sans-serif;
+  --bg: #f7f2ec;
+  --surface: #fff8f1;
+  --surface-2: #f2e6da;
+  --text: #1f1a17;
+  --muted: #6f655d;
+  --primary: #d9502f;
+  --secondary: #6e9f7a;
+  --accent: #e7b84b;
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 12px 30px rgba(0,0,0,0.12);
+  --shadow-soft: 0 6px 16px rgba(0,0,0,0.08);
+  --ring: 0 0 0 3px rgba(217, 80, 47, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141210;
+    --surface: #1c1916;
+    --surface-2: #25211d;
+    --text: #f3ede6;
+    --muted: #b5aaa1;
+    --primary: #ff6b47;
+    --secondary: #7abf8d;
+    --accent: #ffc95c;
+    --shadow: 0 12px 30px rgba(0,0,0,0.4);
+    --shadow-soft: 0 6px 16px rgba(0,0,0,0.28);
+    --ring: 0 0 0 3px rgba(255, 107, 71, 0.35);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: 0.2px;
+}
+
+a {
+  color: inherit;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 1.25rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.1rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+input, textarea, select {
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0,0,0,0.1);
+  padding: 0.65rem 0.8rem;
+  font-size: 0.95rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

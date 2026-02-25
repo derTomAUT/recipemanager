@@ -11,18 +11,39 @@ import { Recipe } from '../../models/recipe.model';
   imports: [CommonModule, RouterModule],
   template: `
     <div class="home-page">
-      <header class="page-header">
-        <h1>Welcome to Recipe Manager</h1>
-        <div class="nav-links">
-          <a routerLink="/recipes" class="btn">All Recipes</a>
-          <a routerLink="/preferences" class="btn">My Preferences</a>
-          <a routerLink="/logs" class="btn">Logs</a>
-          <a *ngIf="isOwner" routerLink="/household/settings" class="btn">Household Settings</a>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Culinary Studio</p>
+          <h1>Cook with intention, save with flavor.</h1>
+          <p class="hero-subtitle">Import recipes, curate your favorites, and let the kitchen feel like home.</p>
+          <div class="hero-actions">
+            <a routerLink="/recipes/new" class="btn btn-primary">Import Recipe</a>
+            <a routerLink="/recipes" class="btn btn-secondary">Browse All</a>
+          </div>
         </div>
-      </header>
+        <div class="hero-panel">
+          <div class="hero-card">
+            <h3>Quick Links</h3>
+            <div class="nav-links">
+              <a routerLink="/recipes" class="chip">All Recipes</a>
+              <a routerLink="/preferences" class="chip">Preferences</a>
+              <a routerLink="/logs" class="chip">Logs</a>
+              <a *ngIf="isOwner" routerLink="/household/settings" class="chip">Household Settings</a>
+            </div>
+          </div>
+          <div class="hero-card accent">
+            <p class="accent-label">Tonight's vibe</p>
+            <h3>Warm, quick, and shareable</h3>
+            <p>Pick a dish in under 20 minutes with smart recommendations.</p>
+          </div>
+        </div>
+      </section>
 
       <section class="recommended-section">
-        <h2>Recommended For You</h2>
+        <div class="section-header">
+          <h2>Recommended For You</h2>
+          <span class="chip">Fresh picks</span>
+        </div>
         <div *ngIf="loading" class="loading">Loading recommendations...</div>
         <div *ngIf="error" class="error">{{ error }}</div>
 
@@ -50,23 +71,35 @@ import { Recipe } from '../../models/recipe.model';
     </div>
   `,
   styles: [`
-    .home-page { padding: 1rem; max-width: 1200px; margin: 0 auto; }
-    .page-header { margin-bottom: 2rem; }
-    .page-header h1 { margin: 0 0 1rem; }
-    .nav-links { display: flex; gap: 1rem; flex-wrap: wrap; }
-    .btn { padding: 0.75rem 1rem; min-height: 44px; display: inline-flex; align-items: center; background: #007bff; color: white; text-decoration: none; border-radius: 4px; }
-    .recommended-section h2 { margin-bottom: 1rem; }
-    .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-    .recipe-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
-    .recipe-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .home-page { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+    .hero { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 2rem; margin-bottom: 2.5rem; }
+    .hero-copy { padding: 1.5rem; border-radius: var(--radius-lg); background: radial-gradient(circle at top left, rgba(231,184,75,0.4), transparent 55%), var(--surface); box-shadow: var(--shadow); }
+    .hero-copy h1 { margin: 0.5rem 0 0.75rem; font-size: clamp(2rem, 3vw, 3rem); }
+    .hero-subtitle { color: var(--muted); margin-bottom: 1.5rem; }
+    .hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+    .hero-panel { display: grid; gap: 1rem; }
+    .hero-card { background: var(--surface); border-radius: var(--radius-lg); padding: 1.25rem; box-shadow: var(--shadow-soft); }
+    .hero-card.accent { background: linear-gradient(135deg, rgba(217,80,47,0.15), rgba(110,159,122,0.15)), var(--surface); }
+    .accent-label { text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.12em; color: var(--muted); }
+    .eyebrow { text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.7rem; color: var(--muted); margin: 0; }
+    .nav-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+
+    .section-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .recipe-card { border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; background: var(--surface); box-shadow: var(--shadow-soft); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .recipe-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
     .recipe-image img { width: 100%; height: 180px; object-fit: cover; }
-    .no-image { width: 100%; height: 180px; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #999; }
+    .no-image { width: 100%; height: 180px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; color: var(--muted); }
     .recipe-info { padding: 1rem; }
-    .recipe-info h3 { margin: 0 0 0.5rem; }
-    .description { color: #666; font-size: 0.9rem; margin: 0 0 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .meta { font-size: 0.85rem; color: #888; display: flex; gap: 1rem; }
+    .recipe-info h3 { margin: 0 0 0.4rem; }
+    .description { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .meta { font-size: 0.85rem; color: var(--muted); display: flex; gap: 1rem; }
     .loading, .error, .empty-state { padding: 2rem; text-align: center; }
-    .error { background: #f8d7da; color: #721c24; border-radius: 4px; }
+    .error { background: rgba(217,80,47,0.15); color: var(--text); border-radius: var(--radius-md); }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; }
+    }
     @media (max-width: 600px) { .recipe-grid { grid-template-columns: 1fr; } }
   `]
 })
