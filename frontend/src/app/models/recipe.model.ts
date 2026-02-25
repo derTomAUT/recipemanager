@@ -59,6 +59,7 @@ export interface CreateRecipeRequest {
   ingredients: IngredientInput[];
   steps: StepInput[];
   tags: string[];
+  importedImages?: ImportedImageInput[];
 }
 
 export interface UpdateRecipeRequest extends CreateRecipeRequest {}
@@ -72,6 +73,7 @@ export interface RecipeDraft {
   ingredients: IngredientInput[];
   steps: StepInput[];
   tags: string[];
+  importedImages?: ImportedImageInput[];
   confidenceScore?: number;
   warnings: string[];
 }
@@ -86,6 +88,12 @@ export interface IngredientInput {
 export interface StepInput {
   instruction: string;
   timerSeconds?: number;
+}
+
+export interface ImportedImageInput {
+  url: string;
+  isTitleImage: boolean;
+  orderIndex: number;
 }
 
 export interface CookEvent {

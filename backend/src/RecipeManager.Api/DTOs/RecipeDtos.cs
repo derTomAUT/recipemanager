@@ -11,7 +11,8 @@ public record CreateRecipeRequest(
     int? CookMinutes,
     List<IngredientDto> Ingredients,
     List<StepDto> Steps,
-    List<string> Tags
+    List<string> Tags,
+    List<ImportedImageDto>? ImportedImages = null
 );
 
 public record UpdateRecipeRequest(

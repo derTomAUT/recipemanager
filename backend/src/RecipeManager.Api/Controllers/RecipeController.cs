@@ -331,6 +331,24 @@ public class RecipeController : ControllerBase
             }
         }
 
+        // Add imported images (only allow stored uploads)
+        if (request.ImportedImages != null)
+        {
+            foreach (var image in request.ImportedImages.OrderBy(i => i.OrderIndex))
+            {
+                if (!IsStoredImageUrl(image.Url)) continue;
+
+                recipe.Images.Add(new RecipeImage
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    Url = image.Url,
+                    IsTitleImage = image.IsTitleImage,
+                    OrderIndex = image.OrderIndex
+                });
+            }
+        }
+
         _db.Recipes.Add(recipe);
         await _db.SaveChangesAsync();
 
@@ -952,5 +970,10 @@ public class RecipeController : ControllerBase
             return null;
         }
         return userId;
+    }
+
+    private static bool IsStoredImageUrl(string url)
+    {
+        return url.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase);
     }
 }

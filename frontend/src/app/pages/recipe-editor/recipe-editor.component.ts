@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { RecipeService } from '../../services/recipe.service';
 import { RecipeDraftService } from '../../services/recipe-draft.service';
-import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDraft } from '../../models/recipe.model';
+import { RecipeImage, CreateRecipeRequest, IngredientInput, StepInput, RecipeDraft, ImportedImageInput } from '../../models/recipe.model';
 
 @Component({
   selector: 'app-recipe-editor',
@@ -181,6 +181,7 @@ export class RecipeEditorComponent implements OnInit {
   steps: StepInput[] = [];
   images: RecipeImage[] = [];
   tagsInput = '';
+  importedImages: ImportedImageInput[] = [];
 
   constructor(
     private route: ActivatedRoute,
@@ -221,6 +222,7 @@ export class RecipeEditorComponent implements OnInit {
       ? draft.steps
       : [{ instruction: '', timerSeconds: undefined }];
     this.tagsInput = (draft.tags || []).join(', ');
+    this.importedImages = draft.importedImages ?? [];
     this.draftWarnings = draft.warnings || [];
   }
 
@@ -302,7 +304,8 @@ export class RecipeEditorComponent implements OnInit {
       title: this.recipe.title.trim(),
       ingredients: validIngredients,
       steps: validSteps,
-      tags
+      tags,
+      importedImages: this.importedImages
     };
 
     this.saving = true;

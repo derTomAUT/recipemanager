@@ -1,6 +1,7 @@
 using System.Text.Json;
 using HtmlAgilityPack;
 using RecipeManager.Api.DTOs;
+using RecipeManager.Api.Infrastructure.Storage;
 using RecipeManager.Api.Models;
 
 namespace RecipeManager.Api.Services;
@@ -9,11 +10,19 @@ public class RecipeImportService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AiRecipeImportService _aiImportService;
+    private readonly ImageFetchService _imageFetchService;
+    private readonly IStorageService _storageService;
 
-    public RecipeImportService(IHttpClientFactory httpClientFactory, AiRecipeImportService aiImportService)
+    public RecipeImportService(
+        IHttpClientFactory httpClientFactory,
+        AiRecipeImportService aiImportService,
+        ImageFetchService imageFetchService,
+        IStorageService storageService)
     {
         _httpClientFactory = httpClientFactory;
         _aiImportService = aiImportService;
+        _imageFetchService = imageFetchService;
+        _storageService = storageService;
     }
 
     public async Task<RecipeDraftDto> ImportFromUrlAsync(string url, Household household)
@@ -25,13 +34,14 @@ public class RecipeImportService
 
     public async Task<RecipeDraftDto> ExtractDraftFromHtmlAsync(string html, string url, Household household)
     {
+        RecipeDraftDto draft;
+
         var jsonLdDraft = TryParseJsonLd(html);
         if (jsonLdDraft != null)
         {
-            return jsonLdDraft with { ConfidenceScore = 0.8 };
+            draft = jsonLdDraft with { ConfidenceScore = 0.8 };
         }
-
-        if (HasAiSettings(household))
+        else if (HasAiSettings(household))
         {
             var readableText = ExtractReadableText(html);
             var wasTruncated = readableText.Length > 100_000;
@@ -40,7 +50,7 @@ public class RecipeImportService
                 readableText = readableText[..100_000];
             }
 
-            return await _aiImportService.ImportAsync(
+            draft = await _aiImportService.ImportAsync(
                 household.AiProvider!,
                 household.AiModel!,
                 household.AiApiKeyEncrypted!,
@@ -48,13 +58,26 @@ public class RecipeImportService
                 readableText,
                 wasTruncated);
         }
-
-        var heuristicDraft = TryParseHeuristics(html);
-        return heuristicDraft with
+        else
         {
-            ConfidenceScore = 0.4,
-            Warnings = new List<string> { "JSON-LD not found; used heuristic extraction." }
-        };
+            var heuristicDraft = TryParseHeuristics(html);
+            draft = heuristicDraft with
+            {
+                ConfidenceScore = 0.4,
+                Warnings = new List<string> { "JSON-LD not found; used heuristic extraction." }
+            };
+        }
+
+        if (HasAiSettings(household))
+        {
+            var importedImages = await TryImportImagesAsync(url, html, draft, household);
+            if (importedImages.Count > 0)
+            {
+                return draft with { ImportedImages = importedImages };
+            }
+        }
+
+        return draft;
     }
 
     private static bool HasAiSettings(Household household)
@@ -123,6 +146,7 @@ public class RecipeImportService
                     ingredients,
                     steps,
                     tags,
+                    new List<ImportedImageDto>(),
                     null,
                     new List<string>()
                 );
@@ -291,6 +315,7 @@ public class RecipeImportService
             ingredients,
             steps,
             new List<string>(),
+            new List<ImportedImageDto>(),
             null,
             new List<string>()
         );
@@ -311,4 +336,218 @@ public class RecipeImportService
         var digits = new string(text.Where(char.IsDigit).ToArray());
         return int.TryParse(digits, out var result) ? result : null;
     }
+
+    public List<string> ExtractImageCandidates(string html, Uri baseUri)
+    {
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+
+        var candidates = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in doc.DocumentNode.SelectNodes("//script[@type='application/ld+json']") ?? Enumerable.Empty<HtmlNode>())
+        {
+            try
+            {
+                using var parsed = JsonDocument.Parse(node.InnerText);
+                var recipeElement = FindRecipeElement(parsed.RootElement);
+                if (recipeElement != null && recipeElement.Value.TryGetProperty("image", out var imageEl))
+                {
+                    CollectImageCandidates(imageEl, candidates, seen, baseUri);
+                }
+            }
+            catch
+            {
+                // ignore invalid JSON-LD
+            }
+        }
+
+        var ogImage = doc.DocumentNode.SelectSingleNode("//meta[@property='og:image']");
+        var ogContent = ogImage?.GetAttributeValue("content", null);
+        AddCandidate(ogContent, candidates, seen, baseUri);
+
+        var containers = doc.DocumentNode.SelectNodes("//main|//article");
+        if (containers != null)
+        {
+            foreach (var container in containers)
+            {
+                foreach (var img in container.SelectNodes(".//img") ?? Enumerable.Empty<HtmlNode>())
+                {
+                    var src = img.GetAttributeValue("src", null);
+                    AddCandidate(src, candidates, seen, baseUri);
+                }
+            }
+        }
+
+        return candidates;
+    }
+
+    private static void CollectImageCandidates(JsonElement imageEl, List<string> candidates, HashSet<string> seen, Uri baseUri)
+    {
+        if (imageEl.ValueKind == JsonValueKind.String)
+        {
+            AddCandidate(imageEl.GetString(), candidates, seen, baseUri);
+            return;
+        }
+
+        if (imageEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in imageEl.EnumerateArray())
+            {
+                CollectImageCandidates(item, candidates, seen, baseUri);
+            }
+            return;
+        }
+
+        if (imageEl.ValueKind == JsonValueKind.Object)
+        {
+            if (imageEl.TryGetProperty("url", out var urlEl))
+            {
+                CollectImageCandidates(urlEl, candidates, seen, baseUri);
+            }
+        }
+    }
+
+    private static void AddCandidate(string? url, List<string> candidates, HashSet<string> seen, Uri baseUri)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return;
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var absolute))
+        {
+            var value = absolute.ToString();
+            if (seen.Add(value))
+            {
+                candidates.Add(value);
+            }
+            return;
+        }
+
+        if (Uri.TryCreate(baseUri, url, out var resolved))
+        {
+            var value = resolved.ToString();
+            if (seen.Add(value))
+            {
+                candidates.Add(value);
+            }
+        }
+    }
+
+    private async Task<List<ImportedImageDto>> TryImportImagesAsync(
+        string url,
+        string html,
+        RecipeDraftDto draft,
+        Household household)
+    {
+        try
+        {
+            var baseUri = new Uri(url);
+            var candidates = ExtractImageCandidates(html, baseUri);
+            if (candidates.Count == 0) return new List<ImportedImageDto>();
+
+            var fetched = await _imageFetchService.FetchImagesAsync(candidates, maxImages: 20);
+            if (fetched.Count == 0) return new List<ImportedImageDto>();
+
+            AiImageSelection? selection = null;
+            if (HasAiSettings(household))
+            {
+                try
+                {
+                    selection = await _aiImportService.SelectImagesAsync(
+                        household.AiProvider!,
+                        household.AiModel!,
+                        household.AiApiKeyEncrypted!,
+                        draft,
+                        fetched);
+                }
+                catch
+                {
+                    selection = null;
+                }
+            }
+
+            var selected = SelectImagesFromResult(selection, fetched);
+            return await StoreSelectedImagesAsync(selected);
+        }
+        catch
+        {
+            return new List<ImportedImageDto>();
+        }
+    }
+
+    private static List<SelectedImage> SelectImagesFromResult(
+        AiImageSelection? selection,
+        List<FetchedImage> fetched)
+    {
+        var selected = new List<SelectedImage>();
+        var used = new HashSet<int>();
+
+        if (selection?.HeroIndex is >= 0 && selection.HeroIndex < fetched.Count)
+        {
+            used.Add(selection.HeroIndex.Value);
+            selected.Add(new SelectedImage(fetched[selection.HeroIndex.Value], true, 0));
+        }
+        else if (fetched.Count > 0)
+        {
+            used.Add(0);
+            selected.Add(new SelectedImage(fetched[0], true, 0));
+        }
+
+        var stepImages = selection?.StepImages ?? new List<AiStepSelection>();
+        var orderedSteps = stepImages
+            .Where(s => s.Index >= 0 && s.Index < fetched.Count && !used.Contains(s.Index))
+            .OrderBy(s => s.StepIndex ?? int.MaxValue)
+            .ThenBy(s => s.Index)
+            .Take(20)
+            .ToList();
+
+        var orderIndex = 1;
+        foreach (var step in orderedSteps)
+        {
+            used.Add(step.Index);
+            selected.Add(new SelectedImage(fetched[step.Index], false, orderIndex++));
+        }
+
+        return selected;
+    }
+
+    private async Task<List<ImportedImageDto>> StoreSelectedImagesAsync(List<SelectedImage> selected)
+    {
+        var result = new List<ImportedImageDto>();
+        foreach (var image in selected)
+        {
+            var fileName = BuildFileName(image.Image.Url, image.Image.ContentType);
+            await using var stream = new MemoryStream(image.Image.Bytes);
+            var storedUrl = await _storageService.UploadAsync(stream, fileName, image.Image.ContentType);
+            result.Add(new ImportedImageDto(storedUrl, image.IsTitleImage, image.OrderIndex));
+        }
+
+        return result;
+    }
+
+    private static string BuildFileName(string url, string contentType)
+    {
+        var fileName = Path.GetFileName(new Uri(url).AbsolutePath);
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = "imported";
+        }
+
+        var extension = Path.GetExtension(fileName);
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = contentType switch
+            {
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                "image/gif" => ".gif",
+                _ => ".jpg"
+            };
+            fileName += extension;
+        }
+
+        return fileName;
+    }
+
+    private record SelectedImage(FetchedImage Image, bool IsTitleImage, int OrderIndex);
 }

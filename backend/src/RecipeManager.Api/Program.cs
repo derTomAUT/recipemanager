@@ -25,6 +25,7 @@ builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<RecipeImportService>();
 builder.Services.AddScoped<AiRecipeImportService>();
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<ImageFetchService>();
 builder.Services.AddSingleton<HouseholdAiSettingsService>();
 builder.Services.AddScoped<AiModelCatalogService>();
 
