@@ -1,0 +1,55 @@
+using Microsoft.EntityFrameworkCore;
+using RecipeManager.Api.Models;
+
+namespace RecipeManager.Api.Data;
+
+public class AppDbContext : DbContext
+{
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Household> Households => Set<Household>();
+    public DbSet<HouseholdMember> HouseholdMembers => Set<HouseholdMember>();
+    public DbSet<Recipe> Recipes => Set<Recipe>();
+    public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
+    public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
+    public DbSet<RecipeImage> RecipeImages => Set<RecipeImage>();
+    public DbSet<RecipeTag> RecipeTags => Set<RecipeTag>();
+    public DbSet<CookEvent> CookEvents => Set<CookEvent>();
+    public DbSet<VotingRound> VotingRounds => Set<VotingRound>();
+    public DbSet<VotingNomination> VotingNominations => Set<VotingNomination>();
+    public DbSet<VotingVote> VotingVotes => Set<VotingVote>();
+    public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+    public DbSet<FavoriteRecipe> FavoriteRecipes => Set<FavoriteRecipe>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasIndex(u => u.GoogleId).IsUnique();
+            entity.HasIndex(u => u.Email).IsUnique();
+        });
+
+        modelBuilder.Entity<Household>(entity =>
+        {
+            entity.HasIndex(h => h.InviteCode).IsUnique();
+        });
+
+        modelBuilder.Entity<HouseholdMember>(entity =>
+        {
+            entity.HasIndex(hm => new { hm.HouseholdId, hm.UserId }).IsUnique();
+        });
+
+        modelBuilder.Entity<FavoriteRecipe>(entity =>
+        {
+            entity.HasIndex(fr => new { fr.UserId, fr.RecipeId }).IsUnique();
+        });
+
+        modelBuilder.Entity<VotingVote>(entity =>
+        {
+            entity.HasIndex(v => new { v.RoundId, v.UserId }).IsUnique();
+        });
+    }
+}
