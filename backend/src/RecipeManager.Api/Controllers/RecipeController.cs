@@ -679,6 +679,149 @@ public class RecipeController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/favorite")]
+    public async Task<IActionResult> AddFavorite(Guid id)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        // Verify recipe exists and belongs to household
+        var recipeExists = await _db.Recipes
+            .AnyAsync(r => r.Id == id && r.HouseholdId == householdId);
+
+        if (!recipeExists)
+        {
+            return NotFound();
+        }
+
+        // Check if already favorited
+        var existing = await _db.FavoriteRecipes
+            .FirstOrDefaultAsync(f => f.UserId == userId.Value && f.RecipeId == id);
+
+        if (existing != null)
+        {
+            return Ok(); // Already favorited
+        }
+
+        var favorite = new FavoriteRecipe
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId.Value,
+            RecipeId = id,
+            FavoritedAt = DateTime.UtcNow
+        };
+
+        _db.FavoriteRecipes.Add(favorite);
+        await _db.SaveChangesAsync();
+
+        return Created($"/api/recipes/{id}/favorite", null);
+    }
+
+    [HttpDelete("{id:guid}/favorite")]
+    public async Task<IActionResult> RemoveFavorite(Guid id)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var favorite = await _db.FavoriteRecipes
+            .FirstOrDefaultAsync(f => f.UserId == userId.Value && f.RecipeId == id);
+
+        if (favorite == null)
+        {
+            return NoContent(); // Not favorited, but that's fine
+        }
+
+        _db.FavoriteRecipes.Remove(favorite);
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpGet("favorites")]
+    public async Task<ActionResult<PagedResult<RecipeListItemDto>>> GetFavorites(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        // Clamp pageSize to reasonable bounds
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        // Get total count of favorites
+        var totalCount = await _db.FavoriteRecipes
+            .Where(f => f.UserId == userId.Value)
+            .CountAsync();
+
+        // Get favorites with recipe details
+        var favorites = await _db.FavoriteRecipes
+            .Where(f => f.UserId == userId.Value)
+            .OrderByDescending(f => f.FavoritedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Include(f => f.Recipe)
+                .ThenInclude(r => r.Tags)
+            .Include(f => f.Recipe)
+                .ThenInclude(r => r.Images)
+            .Select(f => f.Recipe)
+            .ToListAsync();
+
+        // Get cook stats for these recipes
+        var recipeIds = favorites.Select(r => r.Id).ToList();
+        var cookStats = await _db.CookEvents
+            .Where(ce => recipeIds.Contains(ce.RecipeId))
+            .GroupBy(ce => ce.RecipeId)
+            .Select(g => new
+            {
+                RecipeId = g.Key,
+                CookCount = g.Count(),
+                LastCooked = g.Max(ce => ce.CookedAt)
+            })
+            .ToListAsync();
+
+        var cookStatsDict = cookStats.ToDictionary(cs => cs.RecipeId);
+
+        var items = favorites.Select(r =>
+        {
+            var stats = cookStatsDict.GetValueOrDefault(r.Id);
+            var titleImage = r.Images.FirstOrDefault(i => i.IsTitleImage) ?? r.Images.OrderBy(i => i.OrderIndex).FirstOrDefault();
+
+            return new RecipeListItemDto(
+                r.Id,
+                r.Title,
+                r.Description,
+                r.Servings,
+                r.PrepMinutes,
+                r.CookMinutes,
+                titleImage?.Url,
+                r.Tags.Select(t => t.Tag).ToList(),
+                stats?.CookCount ?? 0,
+                stats?.LastCooked,
+                r.CreatedAt
+            );
+        }).ToList();
+
+        return Ok(new PagedResult<RecipeListItemDto>(items, totalCount, page, pageSize));
+    }
+
     private async Task<(Guid householdId, string role)?> GetUserHouseholdAsync(Guid userId)
     {
         var member = await _db.HouseholdMembers
