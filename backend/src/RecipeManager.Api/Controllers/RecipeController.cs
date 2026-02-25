@@ -1,0 +1,489 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using RecipeManager.Api.Data;
+using RecipeManager.Api.DTOs;
+using RecipeManager.Api.Models;
+
+namespace RecipeManager.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class RecipeController : ControllerBase
+{
+    private readonly AppDbContext _db;
+
+    public RecipeController(AppDbContext db)
+    {
+        _db = db;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<PagedResult<RecipeListItemDto>>> GetRecipes(
+        [FromQuery] string? search,
+        [FromQuery] string? tags,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        // Build the base query
+        var query = _db.Recipes
+            .Where(r => r.HouseholdId == householdId)
+            .AsQueryable();
+
+        // Apply search filter
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = search.ToLower();
+            query = query.Where(r =>
+                r.Title.ToLower().Contains(searchLower) ||
+                (r.Description != null && r.Description.ToLower().Contains(searchLower)));
+        }
+
+        // Apply tags filter
+        if (!string.IsNullOrWhiteSpace(tags))
+        {
+            var tagList = tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim().ToLower())
+                .ToList();
+
+            if (tagList.Count > 0)
+            {
+                query = query.Where(r => r.Tags.Any(rt => tagList.Contains(rt.Tag.ToLower())));
+            }
+        }
+
+        // Get total count for pagination
+        var totalCount = await query.CountAsync();
+
+        // Apply pagination and load data
+        var recipes = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Include(r => r.Images)
+            .Include(r => r.Tags)
+            .ToListAsync();
+
+        // Get cook stats for these recipes
+        var recipeIds = recipes.Select(r => r.Id).ToList();
+        var cookStats = await _db.CookEvents
+            .Where(ce => recipeIds.Contains(ce.RecipeId))
+            .GroupBy(ce => ce.RecipeId)
+            .Select(g => new
+            {
+                RecipeId = g.Key,
+                CookCount = g.Count(),
+                LastCooked = g.Max(ce => ce.CookedAt)
+            })
+            .ToListAsync();
+
+        var cookStatsDict = cookStats.ToDictionary(cs => cs.RecipeId);
+
+        var items = recipes.Select(r =>
+        {
+            var stats = cookStatsDict.GetValueOrDefault(r.Id);
+            var titleImage = r.Images.FirstOrDefault(i => i.IsTitleImage) ?? r.Images.OrderBy(i => i.OrderIndex).FirstOrDefault();
+
+            return new RecipeListItemDto(
+                r.Id,
+                r.Title,
+                r.Description,
+                r.Servings,
+                r.PrepMinutes,
+                r.CookMinutes,
+                titleImage?.Url,
+                r.Tags.Select(t => t.Tag).ToList(),
+                stats?.CookCount ?? 0,
+                stats?.LastCooked,
+                r.CreatedAt
+            );
+        }).ToList();
+
+        return Ok(new PagedResult<RecipeListItemDto>(items, totalCount, page, pageSize));
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<RecipeDetailDto>> GetRecipe(Guid id)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        var recipe = await _db.Recipes
+            .Where(r => r.Id == id && r.HouseholdId == householdId)
+            .Include(r => r.Ingredients.OrderBy(i => i.OrderIndex))
+            .Include(r => r.Steps.OrderBy(s => s.OrderIndex))
+            .Include(r => r.Images.OrderBy(i => i.OrderIndex))
+            .Include(r => r.Tags)
+            .FirstOrDefaultAsync();
+
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        // Get cook stats
+        var cookStats = await _db.CookEvents
+            .Where(ce => ce.RecipeId == id)
+            .GroupBy(ce => ce.RecipeId)
+            .Select(g => new
+            {
+                CookCount = g.Count(),
+                LastCooked = g.Max(ce => ce.CookedAt)
+            })
+            .FirstOrDefaultAsync();
+
+        var dto = new RecipeDetailDto(
+            recipe.Id,
+            recipe.Title,
+            recipe.Description,
+            recipe.Servings,
+            recipe.PrepMinutes,
+            recipe.CookMinutes,
+            recipe.Ingredients.Select(i => new RecipeIngredientDto(
+                i.Id, i.OrderIndex, i.Name, i.Quantity, i.Unit, i.Notes
+            )).ToList(),
+            recipe.Steps.Select(s => new RecipeStepDto(
+                s.Id, s.OrderIndex, s.Instruction, s.TimerSeconds
+            )).ToList(),
+            recipe.Images.Select(i => new RecipeImageDto(
+                i.Id, i.Url, i.IsTitleImage, i.OrderIndex
+            )).ToList(),
+            recipe.Tags.Select(t => t.Tag).ToList(),
+            cookStats?.CookCount ?? 0,
+            cookStats?.LastCooked,
+            recipe.CreatedAt,
+            recipe.UpdatedAt,
+            recipe.CreatedByUserId
+        );
+
+        return Ok(dto);
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<RecipeDetailDto>> CreateRecipe([FromBody] CreateRecipeRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        var recipe = new Recipe
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = householdId,
+            Title = request.Title,
+            Description = request.Description,
+            Servings = request.Servings,
+            PrepMinutes = request.PrepMinutes,
+            CookMinutes = request.CookMinutes,
+            CreatedByUserId = userId.Value,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        // Add ingredients
+        if (request.Ingredients != null)
+        {
+            for (int i = 0; i < request.Ingredients.Count; i++)
+            {
+                var ing = request.Ingredients[i];
+                recipe.Ingredients.Add(new RecipeIngredient
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    OrderIndex = i,
+                    Name = ing.Name,
+                    Quantity = ing.Quantity,
+                    Unit = ing.Unit,
+                    Notes = ing.Notes
+                });
+            }
+        }
+
+        // Add steps
+        if (request.Steps != null)
+        {
+            for (int i = 0; i < request.Steps.Count; i++)
+            {
+                var step = request.Steps[i];
+                recipe.Steps.Add(new RecipeStep
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    OrderIndex = i,
+                    Instruction = step.Instruction,
+                    TimerSeconds = step.TimerSeconds
+                });
+            }
+        }
+
+        // Add tags
+        if (request.Tags != null)
+        {
+            foreach (var tag in request.Tags.Distinct())
+            {
+                recipe.Tags.Add(new RecipeTag
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    Tag = tag
+                });
+            }
+        }
+
+        _db.Recipes.Add(recipe);
+        await _db.SaveChangesAsync();
+
+        var dto = new RecipeDetailDto(
+            recipe.Id,
+            recipe.Title,
+            recipe.Description,
+            recipe.Servings,
+            recipe.PrepMinutes,
+            recipe.CookMinutes,
+            recipe.Ingredients.OrderBy(i => i.OrderIndex).Select(i => new RecipeIngredientDto(
+                i.Id, i.OrderIndex, i.Name, i.Quantity, i.Unit, i.Notes
+            )).ToList(),
+            recipe.Steps.OrderBy(s => s.OrderIndex).Select(s => new RecipeStepDto(
+                s.Id, s.OrderIndex, s.Instruction, s.TimerSeconds
+            )).ToList(),
+            new List<RecipeImageDto>(), // No images on creation
+            recipe.Tags.Select(t => t.Tag).ToList(),
+            0, // CookCount
+            null, // LastCooked
+            recipe.CreatedAt,
+            recipe.UpdatedAt,
+            recipe.CreatedByUserId
+        );
+
+        return CreatedAtAction(nameof(GetRecipe), new { id = recipe.Id }, dto);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<ActionResult<RecipeDetailDto>> UpdateRecipe(Guid id, [FromBody] UpdateRecipeRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, _) = membership.Value;
+
+        var recipe = await _db.Recipes
+            .Where(r => r.Id == id && r.HouseholdId == householdId)
+            .Include(r => r.Ingredients)
+            .Include(r => r.Steps)
+            .Include(r => r.Images)
+            .Include(r => r.Tags)
+            .FirstOrDefaultAsync();
+
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        // Update basic properties
+        recipe.Title = request.Title;
+        recipe.Description = request.Description;
+        recipe.Servings = request.Servings;
+        recipe.PrepMinutes = request.PrepMinutes;
+        recipe.CookMinutes = request.CookMinutes;
+        recipe.UpdatedAt = DateTime.UtcNow;
+
+        // Replace ingredients
+        _db.RecipeIngredients.RemoveRange(recipe.Ingredients);
+        recipe.Ingredients.Clear();
+
+        if (request.Ingredients != null)
+        {
+            for (int i = 0; i < request.Ingredients.Count; i++)
+            {
+                var ing = request.Ingredients[i];
+                recipe.Ingredients.Add(new RecipeIngredient
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    OrderIndex = i,
+                    Name = ing.Name,
+                    Quantity = ing.Quantity,
+                    Unit = ing.Unit,
+                    Notes = ing.Notes
+                });
+            }
+        }
+
+        // Replace steps
+        _db.RecipeSteps.RemoveRange(recipe.Steps);
+        recipe.Steps.Clear();
+
+        if (request.Steps != null)
+        {
+            for (int i = 0; i < request.Steps.Count; i++)
+            {
+                var step = request.Steps[i];
+                recipe.Steps.Add(new RecipeStep
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    OrderIndex = i,
+                    Instruction = step.Instruction,
+                    TimerSeconds = step.TimerSeconds
+                });
+            }
+        }
+
+        // Replace tags (keep images as-is)
+        _db.RecipeTags.RemoveRange(recipe.Tags);
+        recipe.Tags.Clear();
+
+        if (request.Tags != null)
+        {
+            foreach (var tag in request.Tags.Distinct())
+            {
+                recipe.Tags.Add(new RecipeTag
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    Tag = tag
+                });
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Get cook stats
+        var cookStats = await _db.CookEvents
+            .Where(ce => ce.RecipeId == id)
+            .GroupBy(ce => ce.RecipeId)
+            .Select(g => new
+            {
+                CookCount = g.Count(),
+                LastCooked = g.Max(ce => ce.CookedAt)
+            })
+            .FirstOrDefaultAsync();
+
+        var dto = new RecipeDetailDto(
+            recipe.Id,
+            recipe.Title,
+            recipe.Description,
+            recipe.Servings,
+            recipe.PrepMinutes,
+            recipe.CookMinutes,
+            recipe.Ingredients.OrderBy(i => i.OrderIndex).Select(i => new RecipeIngredientDto(
+                i.Id, i.OrderIndex, i.Name, i.Quantity, i.Unit, i.Notes
+            )).ToList(),
+            recipe.Steps.OrderBy(s => s.OrderIndex).Select(s => new RecipeStepDto(
+                s.Id, s.OrderIndex, s.Instruction, s.TimerSeconds
+            )).ToList(),
+            recipe.Images.OrderBy(i => i.OrderIndex).Select(i => new RecipeImageDto(
+                i.Id, i.Url, i.IsTitleImage, i.OrderIndex
+            )).ToList(),
+            recipe.Tags.Select(t => t.Tag).ToList(),
+            cookStats?.CookCount ?? 0,
+            cookStats?.LastCooked,
+            recipe.CreatedAt,
+            recipe.UpdatedAt,
+            recipe.CreatedByUserId
+        );
+
+        return Ok(dto);
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteRecipe(Guid id)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null)
+        {
+            return BadRequest("User does not belong to a household");
+        }
+
+        var (householdId, role) = membership.Value;
+
+        var recipe = await _db.Recipes
+            .Where(r => r.Id == id && r.HouseholdId == householdId)
+            .FirstOrDefaultAsync();
+
+        if (recipe == null)
+        {
+            return NotFound();
+        }
+
+        // Authorization: Owner can delete any recipe, Member can only delete their own
+        if (role != "Owner" && recipe.CreatedByUserId != userId.Value)
+        {
+            return Forbid();
+        }
+
+        _db.Recipes.Remove(recipe);
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    private async Task<(Guid householdId, string role)?> GetUserHouseholdAsync(Guid userId)
+    {
+        var member = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == userId);
+        return member == null ? null : (member.HouseholdId, member.Role);
+    }
+
+    private Guid? GetUserId()
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            return null;
+        }
+        return userId;
+    }
+}
