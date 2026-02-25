@@ -24,6 +24,7 @@ builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<RecipeImportService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<HouseholdAiSettingsService>();
+builder.Services.AddScoped<AiModelCatalogService>();
 
 // Auth services
 builder.Services.AddSingleton<GoogleTokenValidator>();
