@@ -1,9 +1,11 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RecipeService } from '../../services/recipe.service';
 import { Recipe, PagedResult } from '../../models/recipe.model';
+import { RecipeImportService } from '../../services/recipe-import.service';
+import { RecipeDraftService } from '../../services/recipe-draft.service';
 
 @Component({
   selector: 'app-recipe-list',
@@ -15,6 +17,18 @@ import { Recipe, PagedResult } from '../../models/recipe.model';
         <h1>Recipes</h1>
         <a routerLink="/recipes/new" class="btn-primary">+ New Recipe</a>
       </header>
+
+      <div class="import-bar">
+        <input
+          type="url"
+          [(ngModel)]="importUrl"
+          placeholder="Paste recipe URL..."
+        />
+        <button (click)="importFromUrl()" [disabled]="importing">
+          {{ importing ? 'Importing...' : 'Import from URL' }}
+        </button>
+      </div>
+      <div *ngIf="importError" class="error">{{ importError }}</div>
 
       <div class="search-bar">
         <input
@@ -73,6 +87,9 @@ import { Recipe, PagedResult } from '../../models/recipe.model';
     .search-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
     .search-bar input { flex: 1; padding: 0.5rem; font-size: 1rem; min-height: 44px; }
     .search-bar button { padding: 0.75rem 1rem; min-height: 44px; }
+    .import-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .import-bar input { flex: 1; padding: 0.5rem; min-height: 44px; }
+    .import-bar button { padding: 0.75rem 1rem; min-height: 44px; }
     .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
     .recipe-card { position: relative; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
     .recipe-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -99,12 +116,20 @@ export class RecipeListComponent implements OnInit {
   result: PagedResult<Recipe> | null = null;
   loading = false;
   error = '';
+  importUrl = '';
+  importing = false;
+  importError = '';
   searchTerm = '';
   currentPage = 1;
   pageSize = 20;
   favoriteIds: Set<string> = new Set();
 
-  constructor(private recipeService: RecipeService) {}
+  constructor(
+    private recipeService: RecipeService,
+    private recipeImportService: RecipeImportService,
+    private recipeDraftService: RecipeDraftService,
+    private router: Router
+  ) {}
 
   ngOnInit() {
     this.loadRecipes();
@@ -133,6 +158,27 @@ export class RecipeListComponent implements OnInit {
   search() {
     this.currentPage = 1;
     this.loadRecipes();
+  }
+
+  importFromUrl() {
+    if (!this.importUrl.trim()) {
+      this.importError = 'Please enter a URL.';
+      return;
+    }
+
+    this.importing = true;
+    this.importError = '';
+    this.recipeImportService.importFromUrl(this.importUrl.trim()).subscribe({
+      next: (draft) => {
+        this.recipeDraftService.setDraft(draft);
+        this.importing = false;
+        this.router.navigate(['/recipes/new']);
+      },
+      error: () => {
+        this.importError = 'Failed to import recipe from URL.';
+        this.importing = false;
+      }
+    });
   }
 
   goToPage(page: number) {
