@@ -69,7 +69,7 @@ import { Recipe, PagedResult } from '../../models/recipe.model';
     .btn-primary { background: #007bff; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; }
     .search-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
     .search-bar input { flex: 1; padding: 0.5rem; font-size: 1rem; }
-    .search-bar button { padding: 0.5rem 1rem; }
+    .search-bar button { padding: 0.75rem 1rem; min-height: 44px; }
     .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
     .recipe-card { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
     .recipe-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -82,7 +82,7 @@ import { Recipe, PagedResult } from '../../models/recipe.model';
     .tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
     .tag { background: #e0e0e0; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
     .pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; }
-    .pagination button { padding: 0.5rem 1rem; }
+    .pagination button { padding: 0.75rem 1rem; min-height: 44px; }
     .pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
     .empty-state { text-align: center; padding: 2rem; color: #666; }
     .loading { text-align: center; padding: 2rem; }

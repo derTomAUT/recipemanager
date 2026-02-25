@@ -74,7 +74,7 @@ import { RecipeDetail } from '../../models/recipe.model';
     .sticky-header { position: sticky; top: 0; background: white; padding: 1rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; z-index: 10; }
     .sticky-header h1 { margin: 0; font-size: 1.5rem; }
     .header-actions { display: flex; gap: 0.5rem; }
-    .btn { padding: 0.5rem 1rem; text-decoration: none; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; }
+    .btn { padding: 0.75rem 1rem; min-height: 44px; text-decoration: none; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; }
     .btn-danger { background: #dc3545; color: white; border-color: #dc3545; }
     .recipe-meta { margin: 1rem 0; }
     .description { color: #666; margin-bottom: 1rem; }
@@ -138,8 +138,9 @@ export class RecipeDetailComponent implements OnInit {
   }
 
   confirmDelete() {
+    if (!this.recipe) return;
     if (confirm('Are you sure you want to delete this recipe?')) {
-      this.recipeService.deleteRecipe(this.recipe!.id).subscribe({
+      this.recipeService.deleteRecipe(this.recipe.id).subscribe({
         next: () => this.router.navigate(['/recipes']),
         error: () => this.error = 'Failed to delete recipe'
       });
