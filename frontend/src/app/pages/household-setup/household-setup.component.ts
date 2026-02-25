@@ -12,6 +12,7 @@ import { environment } from '../../../environments/environment';
   template: `
     <div class="setup-container">
       <h1>Set Up Your Household</h1>
+      <div *ngIf="error" class="error">{{ error }}</div>
       <div class="tabs">
         <button [class.active]="tab === 'create'" (click)="tab = 'create'">Create</button>
         <button [class.active]="tab === 'join'" (click)="tab = 'join'">Join</button>
@@ -32,26 +33,32 @@ import { environment } from '../../../environments/environment';
     button { padding: 0.5rem 1rem; cursor: pointer; }
     button.active { background: #007bff; color: white; }
     input { width: 100%; padding: 0.5rem; margin-bottom: 1rem; }
+    .error { color: #dc3545; margin-bottom: 1rem; padding: 0.5rem; background: #f8d7da; border-radius: 4px; }
   `]
 })
 export class HouseholdSetupComponent {
   tab: 'create' | 'join' = 'create';
   householdName = '';
   inviteCode = '';
+  error = '';
 
   constructor(private http: HttpClient, private router: Router) {}
 
   create() {
+    this.error = '';
     this.http.post(`${environment.apiUrl}/household`, { name: this.householdName })
-      .subscribe(() => {
-        location.reload();
+      .subscribe({
+        next: () => location.reload(),
+        error: () => this.error = 'Failed to create household. Please try again.'
       });
   }
 
   join() {
+    this.error = '';
     this.http.post(`${environment.apiUrl}/household/join`, { inviteCode: this.inviteCode })
-      .subscribe(() => {
-        location.reload();
+      .subscribe({
+        next: () => location.reload(),
+        error: () => this.error = 'Failed to join household. Check the invite code and try again.'
       });
   }
 }
