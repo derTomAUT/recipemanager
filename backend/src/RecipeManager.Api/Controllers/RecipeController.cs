@@ -18,15 +18,21 @@ public class RecipeController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IStorageService _storageService;
     private readonly RecommendationService _recommendationService;
+    private readonly ILogger<RecipeController> _logger;
 
     private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
     private const long MaxFileSize = 10 * 1024 * 1024; // 10MB
 
-    public RecipeController(AppDbContext db, IStorageService storageService, RecommendationService recommendationService)
+    public RecipeController(
+        AppDbContext db,
+        IStorageService storageService,
+        RecommendationService recommendationService,
+        ILogger<RecipeController> logger)
     {
         _db = db;
         _storageService = storageService;
         _recommendationService = recommendationService;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -392,8 +398,9 @@ public class RecipeController : ControllerBase
             var draft = await importService.ImportFromUrlAsync(request.Url, household);
             return Ok(draft);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to import recipe from URL: {Url}", request.Url);
             return StatusCode(502, "Failed to import recipe from URL");
         }
     }
@@ -630,8 +637,9 @@ public class RecipeController : ControllerBase
             using var stream = file.OpenReadStream();
             url = await _storageService.UploadAsync(stream, file.FileName, file.ContentType);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to upload image for recipe {RecipeId}", id);
             return StatusCode(500, "Failed to upload image");
         }
 
@@ -744,9 +752,9 @@ public class RecipeController : ControllerBase
         {
             await _storageService.DeleteAsync(image.Url);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log would go here; continue with DB deletion
+            _logger.LogError(ex, "Failed to delete image {ImageId} for recipe {RecipeId}", imageId, id);
         }
 
         // Remove from database

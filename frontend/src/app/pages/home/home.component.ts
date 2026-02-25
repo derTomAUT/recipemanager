@@ -2,6 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { RecipeService } from '../../services/recipe.service';
+import { AuthService } from '../../services/auth.service';
 import { Recipe } from '../../models/recipe.model';
 
 @Component({
@@ -15,6 +16,8 @@ import { Recipe } from '../../models/recipe.model';
         <div class="nav-links">
           <a routerLink="/recipes" class="btn">All Recipes</a>
           <a routerLink="/preferences" class="btn">My Preferences</a>
+          <a routerLink="/logs" class="btn">Logs</a>
+          <a *ngIf="isOwner" routerLink="/household/settings" class="btn">Household Settings</a>
         </div>
       </header>
 
@@ -71,10 +74,18 @@ export class HomeComponent implements OnInit {
   recommended: Recipe[] = [];
   loading = false;
   error = '';
+  isOwner = false;
 
-  constructor(private recipeService: RecipeService, private cdr: ChangeDetectorRef) {}
+  constructor(
+    private recipeService: RecipeService,
+    private authService: AuthService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit() {
+    this.authService.user$.subscribe(user => {
+      this.isOwner = user?.role === 'Owner';
+    });
     this.loadRecommendations();
   }
 

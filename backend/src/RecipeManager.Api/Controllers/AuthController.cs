@@ -17,12 +17,18 @@ public class AuthController : ControllerBase
     private readonly AppDbContext _db;
     private readonly GoogleTokenValidator _googleValidator;
     private readonly JwtTokenGenerator _jwtGenerator;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(AppDbContext db, GoogleTokenValidator googleValidator, JwtTokenGenerator jwtGenerator)
+    public AuthController(
+        AppDbContext db,
+        GoogleTokenValidator googleValidator,
+        JwtTokenGenerator jwtGenerator,
+        ILogger<AuthController> logger)
     {
         _db = db;
         _googleValidator = googleValidator;
         _jwtGenerator = jwtGenerator;
+        _logger = logger;
     }
 
     [HttpPost("google")]
@@ -33,8 +39,9 @@ public class AuthController : ControllerBase
         {
             payload = await _googleValidator.ValidateAsync(request.IdToken);
         }
-        catch (InvalidJwtException)
+        catch (InvalidJwtException ex)
         {
+            _logger.LogWarning(ex, "Invalid Google ID token");
             return Unauthorized();
         }
 
