@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using RecipeManager.Api.Data;
 using RecipeManager.Api.Infrastructure.Auth;
 using RecipeManager.Api.Infrastructure.Storage;
+using RecipeManager.Api.Services;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddSingleton<IStorageService, LocalFileStorageService>();
+
+// Caching
+builder.Services.AddMemoryCache();
+
+// Application services
+builder.Services.AddScoped<RecommendationService>();
 
 // Auth services
 builder.Services.AddSingleton<GoogleTokenValidator>();

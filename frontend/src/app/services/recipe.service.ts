@@ -69,4 +69,8 @@ export class RecipeService {
     if (params.pageSize) httpParams = httpParams.set('pageSize', params.pageSize.toString());
     return this.http.get<PagedResult<Recipe>>(`${this.apiUrl}/favorites`, { params: httpParams });
   }
+
+  getRecommended(count: number = 10): Observable<Recipe[]> {
+    return this.http.get<Recipe[]>(`${this.apiUrl}/recommended?count=${count}`);
+  }
 }

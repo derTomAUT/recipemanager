@@ -6,6 +6,7 @@ using RecipeManager.Api.Data;
 using RecipeManager.Api.DTOs;
 using RecipeManager.Api.Infrastructure.Storage;
 using RecipeManager.Api.Models;
+using RecipeManager.Api.Services;
 
 namespace RecipeManager.Api.Controllers;
 
@@ -16,14 +17,16 @@ public class RecipeController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IStorageService _storageService;
+    private readonly RecommendationService _recommendationService;
 
     private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
     private const long MaxFileSize = 10 * 1024 * 1024; // 10MB
 
-    public RecipeController(AppDbContext db, IStorageService storageService)
+    public RecipeController(AppDbContext db, IStorageService storageService, RecommendationService recommendationService)
     {
         _db = db;
         _storageService = storageService;
+        _recommendationService = recommendationService;
     }
 
     [HttpGet]
@@ -126,6 +129,51 @@ public class RecipeController : ControllerBase
         }).ToList();
 
         return Ok(new PagedResult<RecipeListItemDto>(items, totalCount, page, pageSize));
+    }
+
+    [HttpGet("recommended")]
+    public async Task<ActionResult<List<RecipeListItemDto>>> GetRecommendedRecipes([FromQuery] int count = 10)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null) return BadRequest("User does not belong to a household");
+        var (householdId, _) = membership.Value;
+
+        count = Math.Clamp(count, 1, 20);
+
+        var recipes = await _recommendationService.GetRecommendedRecipesAsync(userId.Value, householdId, count);
+
+        // Get cook stats
+        var recipeIds = recipes.Select(r => r.Id).ToList();
+        var cookStats = await _db.CookEvents
+            .Where(c => recipeIds.Contains(c.RecipeId))
+            .GroupBy(c => c.RecipeId)
+            .Select(g => new { RecipeId = g.Key, Count = g.Count(), LastCooked = g.Max(c => c.CookedAt) })
+            .ToDictionaryAsync(x => x.RecipeId, x => (x.Count, x.LastCooked));
+
+        var result = recipes.Select(r =>
+        {
+            var titleImage = r.Images.FirstOrDefault(i => i.IsTitleImage) ?? r.Images.OrderBy(i => i.OrderIndex).FirstOrDefault();
+            cookStats.TryGetValue(r.Id, out var stats);
+
+            return new RecipeListItemDto(
+                r.Id,
+                r.Title,
+                r.Description,
+                r.Servings,
+                r.PrepMinutes,
+                r.CookMinutes,
+                titleImage?.Url,
+                r.Tags.Select(t => t.Tag).ToList(),
+                stats.Count,
+                stats.LastCooked == default ? null : stats.LastCooked,
+                r.CreatedAt
+            );
+        }).ToList();
+
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
