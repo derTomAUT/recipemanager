@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<VotingVote> VotingVotes => Set<VotingVote>();
     public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
     public DbSet<FavoriteRecipe> FavoriteRecipes => Set<FavoriteRecipe>();
+    public DbSet<AiDebugLog> AiDebugLogs => Set<AiDebugLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,6 +51,13 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<VotingVote>(entity =>
         {
             entity.HasIndex(v => new { v.RoundId, v.UserId }).IsUnique();
+        });
+
+        modelBuilder.Entity<AiDebugLog>(entity =>
+        {
+            entity.HasIndex(l => l.CreatedAtUtc);
+            entity.HasIndex(l => new { l.Provider, l.Operation });
+            entity.HasIndex(l => l.Success);
         });
     }
 }

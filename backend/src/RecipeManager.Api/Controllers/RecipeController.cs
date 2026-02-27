@@ -448,7 +448,7 @@ public class RecipeController : ControllerBase
                 return NotFound();
             }
 
-            var draft = await importService.ImportFromUrlAsync(request.Url, household);
+            var draft = await importService.ImportFromUrlAsync(request.Url, household, userId.Value);
             return Ok(draft);
         }
         catch (Exception ex)

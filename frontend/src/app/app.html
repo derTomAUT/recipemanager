@@ -1,27 +1,27 @@
 <header class="top-nav" *ngIf="showNavbar">
-  <button class="logout-link" type="button" (click)="logout()">
-    <span class="nav-icon" aria-hidden="true">↩</span>
-    <span class="nav-label">Logout</span>
-  </button>
-
   <nav class="center-links">
     <a routerLink="/home" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">⌂</span>
+      <span class="nav-icon" aria-hidden="true">&#8962;</span>
       <span class="nav-label">Home</span>
     </a>
     <a routerLink="/recipes" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">☰</span>
+      <span class="nav-icon" aria-hidden="true">&#9776;</span>
       <span class="nav-label">Recipes</span>
     </a>
     <a routerLink="/household/settings" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">⚙</span>
+      <span class="nav-icon" aria-hidden="true">&#9881;</span>
       <span class="nav-label">Household</span>
     </a>
-    <a routerLink="/logs" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">📝</span>
-      <span class="nav-label">Logs</span>
+    <a routerLink="/debug" routerLinkActive="active">
+      <span class="nav-icon" aria-hidden="true">&#128269;</span>
+      <span class="nav-label">Debug</span>
     </a>
   </nav>
+
+  <button class="logout-link" type="button" (click)="logout()">
+    <span class="nav-icon" aria-hidden="true">&#8617;</span>
+    <span class="nav-label">Logout</span>
+  </button>
 </header>
 
 <main class="app-content" [class.with-navbar]="showNavbar">

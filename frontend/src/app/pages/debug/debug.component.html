@@ -1,0 +1,95 @@
+<div class="debug-page">
+  <header class="debug-header">
+    <h1>Debug</h1>
+    <a routerLink="/home" class="btn btn-secondary">Back</a>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab-btn" [class.active]="activeTab === 'ai'" (click)="setTab('ai')" type="button">AI Calls</button>
+    <button class="tab-btn" [class.active]="activeTab === 'logs'" (click)="setTab('logs')" type="button">Logs</button>
+  </div>
+
+  <section *ngIf="activeTab === 'ai'" class="tab-panel">
+    <div class="card filter-bar">
+      <label>
+        <span>Provider</span>
+        <input [(ngModel)]="provider" placeholder="OpenAI / Anthropic" />
+      </label>
+      <label>
+        <span>Operation</span>
+        <input [(ngModel)]="operation" placeholder="RecipeImport, ModelList..." />
+      </label>
+      <label>
+        <span>Success</span>
+        <select [(ngModel)]="success">
+          <option value="all">All</option>
+          <option value="true">Success only</option>
+          <option value="false">Failed only</option>
+        </select>
+      </label>
+      <div class="filter-actions">
+        <button class="btn btn-primary" type="button" (click)="applyFilters()" [disabled]="aiLoading">Apply</button>
+        <button class="btn btn-secondary" type="button" (click)="clearFilters()" [disabled]="aiLoading">Reset</button>
+      </div>
+    </div>
+
+    <div *ngIf="aiError" class="error">{{ aiError }}</div>
+    <div *ngIf="aiLoading" class="loading">Loading AI calls...</div>
+
+    <div *ngIf="!aiLoading && aiEntries.length === 0" class="empty card">No AI calls found.</div>
+
+    <div *ngIf="!aiLoading && aiEntries.length > 0" class="ai-list">
+      <article class="card ai-entry" *ngFor="let item of aiEntries">
+        <div class="entry-meta">
+          <span class="chip">{{ item.provider }}</span>
+          <span class="chip">{{ item.operation }}</span>
+          <span class="chip">{{ item.model || '-' }}</span>
+          <span class="chip" [class.bad]="!item.success">{{ item.success ? 'Success' : 'Failed' }}</span>
+          <span class="entry-time">{{ item.createdAtUtc | date:'yyyy-MM-dd HH:mm:ss' }} UTC</span>
+        </div>
+
+        <div *ngIf="item.statusCode" class="status">HTTP {{ item.statusCode }}</div>
+        <div *ngIf="item.error" class="error-inline">{{ item.error }}</div>
+
+        <div class="payload">
+          <button class="payload-toggle" type="button" (click)="toggleRequest(item.id)">
+            {{ isRequestExpanded(item.id) ? 'Hide request' : 'Show request' }}
+          </button>
+          <pre *ngIf="isRequestExpanded(item.id)">{{ formatJson(item.requestJsonSanitized) }}</pre>
+        </div>
+
+        <div class="payload">
+          <button class="payload-toggle" type="button" (click)="toggleResponse(item.id)">
+            {{ isResponseExpanded(item.id) ? 'Hide response' : 'Show response' }}
+          </button>
+          <pre *ngIf="isResponseExpanded(item.id)">{{ formatJson(item.responseJsonSanitized) }}</pre>
+        </div>
+      </article>
+    </div>
+
+    <div class="pager" *ngIf="totalCount > pageSize">
+      <button class="btn btn-secondary" type="button" (click)="previousPage()" [disabled]="!hasPreviousPage || aiLoading">Previous</button>
+      <span>Page {{ page }} · {{ totalCount }} items</span>
+      <button class="btn btn-secondary" type="button" (click)="nextPage()" [disabled]="!hasNextPage || aiLoading">Next</button>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'logs'" class="tab-panel">
+    <div class="controls">
+      <span class="status" [class.connected]="connected">{{ connected ? 'Connected' : 'Disconnected' }}</span>
+      <button class="btn btn-secondary" type="button" (click)="togglePause()">{{ paused ? 'Resume' : 'Pause' }}</button>
+      <button class="btn btn-secondary" type="button" (click)="clearLogs()">Clear</button>
+      <label class="auto-scroll">
+        <input type="checkbox" [checked]="autoScroll" (change)="toggleAutoScroll($event)" />
+        Auto-scroll
+      </label>
+    </div>
+
+    <div class="log-container" #logContainer>
+      <div *ngFor="let line of lines" class="log-line">{{ line }}</div>
+      <div *ngIf="lines.length === 0" class="empty">No log lines yet.</div>
+    </div>
+
+    <div *ngIf="logsError" class="error">{{ logsError }}</div>
+  </section>
+</div>

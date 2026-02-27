@@ -52,7 +52,7 @@ public class AiController : ControllerBase
             return BadRequest("API key not set");
         }
 
-        var models = await _catalog.GetModelsAsync(provider, household.AiApiKeyEncrypted);
+        var models = await _catalog.GetModelsAsync(provider, household.AiApiKeyEncrypted, membership.HouseholdId, uid);
         return Ok(models);
     }
 }

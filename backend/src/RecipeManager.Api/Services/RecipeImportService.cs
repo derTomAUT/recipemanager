@@ -29,7 +29,7 @@ public class RecipeImportService
         _storageService = storageService;
     }
 
-    public async Task<RecipeDraftDto> ImportFromUrlAsync(string url, Household household)
+    public async Task<RecipeDraftDto> ImportFromUrlAsync(string url, Household household, Guid? userId = null)
     {
         var client = _httpClientFactory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -37,7 +37,7 @@ public class RecipeImportService
         using var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
         var html = await response.Content.ReadAsStringAsync();
-        return await ExtractDraftFromHtmlAsync(html, url, household);
+        return await ExtractDraftFromHtmlAsync(html, url, household, userId);
     }
 
     private static void AddBrowserHeaders(HttpRequestMessage request)
@@ -48,7 +48,7 @@ public class RecipeImportService
         request.Headers.Referrer = new Uri("https://www.google.com/");
     }
 
-    public async Task<RecipeDraftDto> ExtractDraftFromHtmlAsync(string html, string url, Household household)
+    public async Task<RecipeDraftDto> ExtractDraftFromHtmlAsync(string html, string url, Household household, Guid? userId = null)
     {
         RecipeDraftDto draft;
 
@@ -72,7 +72,9 @@ public class RecipeImportService
                 household.AiApiKeyEncrypted!,
                 url,
                 readableText,
-                wasTruncated);
+                wasTruncated,
+                household.Id,
+                userId);
         }
         else
         {
@@ -88,7 +90,7 @@ public class RecipeImportService
 
         if (HasAiSettings(household))
         {
-            var imageResult = await TryImportImagesAsync(url, html, draft, household);
+            var imageResult = await TryImportImagesAsync(url, html, draft, household, userId);
             if (imageResult.ImportedImages.Count > 0 || imageResult.CandidateImages.Count > 0)
             {
                 return draft with
@@ -591,7 +593,8 @@ public class RecipeImportService
         string url,
         string html,
         RecipeDraftDto draft,
-        Household household)
+        Household household,
+        Guid? userId = null)
     {
         try
         {
@@ -612,7 +615,9 @@ public class RecipeImportService
                         household.AiModel!,
                         household.AiApiKeyEncrypted!,
                         draft,
-                        fetched);
+                        fetched,
+                        household.Id,
+                        userId);
                 }
                 catch
                 {

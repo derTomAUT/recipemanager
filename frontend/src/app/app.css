@@ -13,7 +13,8 @@
 }
 
 .logout-link {
-  justify-self: start;
+  grid-column: 3;
+  justify-self: end;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;

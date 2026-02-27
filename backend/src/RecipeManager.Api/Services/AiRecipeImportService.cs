@@ -8,16 +8,27 @@ public class AiRecipeImportService
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly HouseholdAiSettingsService _settings;
+    private readonly AiDebugLogService? _debugLogService;
     private readonly ILogger<AiRecipeImportService> _logger;
 
     public AiRecipeImportService(
         IHttpClientFactory httpClientFactory,
         HouseholdAiSettingsService settings,
+        AiDebugLogService? debugLogService,
         ILogger<AiRecipeImportService> logger)
     {
         _httpClientFactory = httpClientFactory;
         _settings = settings;
+        _debugLogService = debugLogService;
         _logger = logger;
+    }
+
+    public AiRecipeImportService(
+        IHttpClientFactory httpClientFactory,
+        HouseholdAiSettingsService settings,
+        ILogger<AiRecipeImportService> logger)
+        : this(httpClientFactory, settings, null, logger)
+    {
     }
 
     public async Task<RecipeDraftDto> ImportAsync(
@@ -26,7 +37,9 @@ public class AiRecipeImportService
         string encryptedKey,
         string url,
         string readableText,
-        bool wasTruncated)
+        bool wasTruncated,
+        Guid? householdId = null,
+        Guid? userId = null)
     {
         var apiKey = _settings.Decrypt(encryptedKey).Trim();
         var client = _httpClientFactory.CreateClient();
@@ -56,9 +69,16 @@ public class AiRecipeImportService
             var payloadJson = JsonSerializer.Serialize(payload);
             _logger.LogDebug("AI import request (OpenAI): {Json}", payloadJson);
             var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", payload);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var content = json.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            var responseBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                await LogDebugAsync(householdId, userId, provider, model, "RecipeImport", payloadJson, responseBody, (int)response.StatusCode, false, "OpenAI recipe import failed");
+                response.EnsureSuccessStatusCode();
+            }
+
+            await LogDebugAsync(householdId, userId, provider, model, "RecipeImport", payloadJson, responseBody, (int)response.StatusCode, true, null);
+            using var json = JsonDocument.Parse(responseBody);
+            var content = json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
             _logger.LogDebug("AI import response (OpenAI): {Json}", content);
             return ParseDraftFromJson(SanitizeJson(content));
         }
@@ -77,9 +97,16 @@ public class AiRecipeImportService
             var payloadJson = JsonSerializer.Serialize(payload);
             _logger.LogDebug("AI import request (Anthropic): {Json}", payloadJson);
             var response = await client.PostAsJsonAsync("https://api.anthropic.com/v1/messages", payload);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var content = json.GetProperty("content")[0].GetProperty("text").GetString();
+            var responseBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                await LogDebugAsync(householdId, userId, provider, model, "RecipeImport", payloadJson, responseBody, (int)response.StatusCode, false, "Anthropic recipe import failed");
+                response.EnsureSuccessStatusCode();
+            }
+
+            await LogDebugAsync(householdId, userId, provider, model, "RecipeImport", payloadJson, responseBody, (int)response.StatusCode, true, null);
+            using var json = JsonDocument.Parse(responseBody);
+            var content = json.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
             _logger.LogDebug("AI import response (Anthropic): {Json}", content);
             return ParseDraftFromJson(SanitizeJson(content));
         }
@@ -92,7 +119,9 @@ public class AiRecipeImportService
         string model,
         string encryptedKey,
         RecipeDraftDto draft,
-        List<FetchedImage> images)
+        List<FetchedImage> images,
+        Guid? householdId = null,
+        Guid? userId = null)
     {
         if (images.Count == 0) return null;
 
@@ -137,9 +166,16 @@ public class AiRecipeImportService
             _logger.LogDebug("AI image selection request (OpenAI): {Json}", payloadJson);
 
             var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", payload);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var contentText = json.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            var responseBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                await LogDebugAsync(householdId, userId, provider, model, "ImageSelection", payloadJson, responseBody, (int)response.StatusCode, false, "OpenAI image selection failed");
+                response.EnsureSuccessStatusCode();
+            }
+
+            await LogDebugAsync(householdId, userId, provider, model, "ImageSelection", payloadJson, responseBody, (int)response.StatusCode, true, null);
+            using var json = JsonDocument.Parse(responseBody);
+            var contentText = json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
             _logger.LogDebug("AI image selection response (OpenAI): {Json}", contentText);
             return ParseImageSelection(SanitizeJson(contentText));
         }
@@ -176,9 +212,16 @@ public class AiRecipeImportService
             _logger.LogDebug("AI image selection request (Anthropic): {Json}", payloadJson);
 
             var response = await client.PostAsJsonAsync("https://api.anthropic.com/v1/messages", payload);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var contentText = json.GetProperty("content")[0].GetProperty("text").GetString();
+            var responseBody = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                await LogDebugAsync(householdId, userId, provider, model, "ImageSelection", payloadJson, responseBody, (int)response.StatusCode, false, "Anthropic image selection failed");
+                response.EnsureSuccessStatusCode();
+            }
+
+            await LogDebugAsync(householdId, userId, provider, model, "ImageSelection", payloadJson, responseBody, (int)response.StatusCode, true, null);
+            using var json = JsonDocument.Parse(responseBody);
+            var contentText = json.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
             _logger.LogDebug("AI image selection response (Anthropic): {Json}", contentText);
             return ParseImageSelection(SanitizeJson(contentText));
         }
@@ -260,6 +303,23 @@ public class AiRecipeImportService
             new List<string> { "Imported with AI" },
             null
         );
+    }
+
+    private Task LogDebugAsync(
+        Guid? householdId,
+        Guid? userId,
+        string provider,
+        string model,
+        string operation,
+        string? requestJson,
+        string? responseJson,
+        int? statusCode,
+        bool success,
+        string? error)
+    {
+        return _debugLogService == null
+            ? Task.CompletedTask
+            : _debugLogService.LogAsync(householdId, userId, provider, model, operation, requestJson, responseJson, statusCode, success, error);
     }
 
     private static string SanitizeJson(string? json)
