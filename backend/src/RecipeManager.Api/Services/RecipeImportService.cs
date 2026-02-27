@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Text.Json;
 using HtmlAgilityPack;
 using RecipeManager.Api.DTOs;
@@ -28,8 +29,20 @@ public class RecipeImportService
     public async Task<RecipeDraftDto> ImportFromUrlAsync(string url, Household household)
     {
         var client = _httpClientFactory.CreateClient();
-        var html = await client.GetStringAsync(url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        AddBrowserHeaders(request);
+        using var response = await client.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        var html = await response.Content.ReadAsStringAsync();
         return await ExtractDraftFromHtmlAsync(html, url, household);
+    }
+
+    private static void AddBrowserHeaders(HttpRequestMessage request)
+    {
+        request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        request.Headers.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        request.Headers.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
+        request.Headers.Referrer = new Uri("https://www.google.com/");
     }
 
     public async Task<RecipeDraftDto> ExtractDraftFromHtmlAsync(string html, string url, Household household)
