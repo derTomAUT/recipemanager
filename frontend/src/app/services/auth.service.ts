@@ -52,7 +52,27 @@ export class AuthService {
   }
 
   isAuthenticated(): boolean {
-    return !!this.getToken();
+    const token = this.getToken();
+    return !!token && !this.isTokenExpired(token);
+  }
+
+  isTokenExpired(token: string): boolean {
+    const payload = this.getTokenPayload(token);
+    if (!payload?.exp) return true;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return payload.exp <= nowSeconds;
+  }
+
+  private getTokenPayload(token: string): { exp?: number } | null {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    try {
+      const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const json = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='));
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
   }
 
   private getStoredUser(): User | null {
