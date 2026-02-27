@@ -1,0 +1,7 @@
+node_modules
+dist
+.angular
+.vscode
+.idea
+coverage
+npm-debug.log*

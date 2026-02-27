@@ -1,0 +1,64 @@
+name: Deploy To VPS
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          REPO_URL: ${{ secrets.VPS_REPO_URL }}
+          APP_PORT: ${{ secrets.APP_PORT }}
+          PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
+          JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE }}
+          JWT_EXPIRY_MINUTES: ${{ secrets.JWT_EXPIRY_MINUTES }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          envs: APP_DIR,REPO_URL,APP_PORT,PUBLIC_ORIGIN,POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,JWT_SECRET,JWT_ISSUER,JWT_AUDIENCE,JWT_EXPIRY_MINUTES,GOOGLE_CLIENT_ID
+          script: |
+            set -euo pipefail
+
+            if [ -z "${APP_DIR}" ]; then
+              APP_DIR="$HOME/recipemanager"
+            fi
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              git clone "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch --all
+            git checkout master
+            git reset --hard origin/master
+
+            cat > infra/.env <<EOF
+            APP_PORT=${APP_PORT:-80}
+            PUBLIC_ORIGIN=${PUBLIC_ORIGIN}
+            POSTGRES_DB=${POSTGRES_DB}
+            POSTGRES_USER=${POSTGRES_USER}
+            POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            JWT_SECRET=${JWT_SECRET}
+            JWT_ISSUER=${JWT_ISSUER}
+            JWT_AUDIENCE=${JWT_AUDIENCE}
+            JWT_EXPIRY_MINUTES=${JWT_EXPIRY_MINUTES:-1440}
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+            EOF
+
+            docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d --build
+            docker image prune -f
