@@ -22,6 +22,7 @@ Deployment SSH:
 
 App configuration:
 - `APP_PORT` (usually `80`)
+  - default in this setup: `8082`
 - `PUBLIC_ORIGIN` (e.g. `https://recipes.example.com`)
 - `POSTGRES_DB`
 - `POSTGRES_USER`

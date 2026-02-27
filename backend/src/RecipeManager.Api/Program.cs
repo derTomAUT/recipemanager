@@ -81,7 +81,13 @@ builder.Services.AddCors(options =>
     {
         var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
         var origins = configuredOrigins
-            .Concat(new[] { "http://localhost:4200", "http://127.0.0.1:4200" })
+            .Concat(new[]
+            {
+                "http://localhost:4200",
+                "http://127.0.0.1:4200",
+                "https://kaia5.tzis.net",
+                "http://kaia5.tzis.net"
+            })
             .Where(o => !string.IsNullOrWhiteSpace(o))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
