@@ -60,9 +60,16 @@ import { RecipeDetail } from '../../models/recipe.model';
           <ol class="step-list">
             <li *ngFor="let step of recipe.steps; let i = index" class="step">
               <div class="step-number">{{ i + 1 }}</div>
-              <div class="step-content">
-                <p>{{ step.instruction }}</p>
-                <span *ngIf="step.timerSeconds" class="timer">Timer: {{ formatTime(step.timerSeconds) }}</span>
+              <div class="step-body">
+                <div class="step-image" *ngIf="getStepImage(i) as stepImage">
+                  <div class="step-carousel">
+                    <img [src]="stepImage.url" [alt]="recipe.title + ' step ' + (i + 1)" />
+                  </div>
+                </div>
+                <div class="step-content">
+                  <p>{{ step.instruction }}</p>
+                  <span *ngIf="step.timerSeconds" class="timer">Timer: {{ formatTime(step.timerSeconds) }}</span>
+                </div>
               </div>
             </li>
           </ol>
@@ -102,8 +109,12 @@ import { RecipeDetail } from '../../models/recipe.model';
     .quantity { font-weight: 500; min-width: 80px; }
     .notes { color: var(--muted); font-size: 0.9rem; }
     .step-list { list-style: none; padding: 0; counter-reset: step; }
-    .step { display: flex; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    .step { display: grid; grid-template-columns: 32px 1fr; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
     .step-number { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+    .step-body { display: grid; grid-template-columns: minmax(0, 220px) 1fr; gap: 1rem; align-items: start; }
+    .step-image { position: relative; }
+    .step-carousel { display: flex; gap: 0.5rem; overflow-x: auto; scroll-snap-type: x mandatory; }
+    .step-carousel img { width: 100%; max-width: 220px; height: 140px; object-fit: cover; border-radius: 10px; scroll-snap-align: start; }
     .step-content { flex: 1; }
     .step-content p { margin: 0; font-size: 1.1rem; line-height: 1.6; }
     .timer { color: var(--primary); font-size: 0.9rem; margin-top: 0.5rem; display: inline-block; }
@@ -112,6 +123,10 @@ import { RecipeDetail } from '../../models/recipe.model';
     .error { color: var(--text); text-align: center; padding: 1rem; background: rgba(217,80,47,0.15); border-radius: 4px; }
     .not-found { text-align: center; padding: 2rem; color: var(--muted); }
     .not-found a { color: var(--primary); }
+    @media (max-width: 800px) {
+      .step-body { grid-template-columns: 1fr; }
+      .step-carousel img { max-width: 85vw; }
+    }
     @media (max-width: 600px) {
       .sticky-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
       .step-content p { font-size: 1rem; }
@@ -177,6 +192,10 @@ export class RecipeDetailComponent implements OnInit {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  }
+
+  getStepImage(stepIndex: number) {
+    return this.recipe?.images.find(img => img.orderIndex === stepIndex + 1);
   }
 
   markCooked() {
