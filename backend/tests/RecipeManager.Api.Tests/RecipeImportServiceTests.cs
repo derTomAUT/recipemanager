@@ -110,9 +110,53 @@ public class RecipeImportServiceTests
         var service = CreateService();
         var text = service.ExtractReadableText(html);
 
-        Assert.Contains("Kartoffeln", text);
-        Assert.Contains("1000", text);
-        Assert.Contains("g", text);
+        Assert.Contains("Ingredients table rows:", text);
+        Assert.Contains("1000 g Kartoffeln", text);
+    }
+
+    [Fact]
+    public void ExtractReadableText_PrioritizesIngredientsTableWhenMainIsVeryLong()
+    {
+        var longMain = new string('x', 120_000);
+        var html = $@"
+<html><body>
+<main>{longMain}</main>
+<div class=""ingredients-table"">
+  <table>
+    <tr>
+      <td>1000</td><th>g</th><th>Kartoffeln</th>
+    </tr>
+  </table>
+</div>
+</body></html>";
+
+        var service = CreateService();
+        var text = service.ExtractReadableText(html);
+        var truncated = text.Length > 100_000 ? text[..100_000] : text;
+
+        Assert.Contains("1000 g Kartoffeln", truncated);
+    }
+
+    [Fact]
+    public void ExtractReadableText_IncludesIngredientsTableInsideNoscript()
+    {
+        var html = @"
+<html><body>
+<main><p>Main text</p></main>
+<noscript>
+  <div class=""ingredients-table"">
+    <table>
+      <tr><td>1000</td><th>g</th><th>Kartoffeln</th></tr>
+    </table>
+  </div>
+</noscript>
+</body></html>";
+
+        var service = CreateService();
+        var text = service.ExtractReadableText(html);
+
+        Assert.Contains("Ingredients table rows:", text);
+        Assert.Contains("1000 g Kartoffeln", text);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
+using Microsoft.Extensions.Logging;
 using RecipeManager.Api.DTOs;
 using RecipeManager.Api.Infrastructure.Storage;
 using RecipeManager.Api.Models;
@@ -16,17 +17,20 @@ public class RecipeImportService
     private readonly AiRecipeImportService _aiImportService;
     private readonly ImageFetchService _imageFetchService;
     private readonly IStorageService _storageService;
+    private readonly ILogger<RecipeImportService>? _logger;
 
     public RecipeImportService(
         IHttpClientFactory httpClientFactory,
         AiRecipeImportService aiImportService,
         ImageFetchService imageFetchService,
-        IStorageService storageService)
+        IStorageService storageService,
+        ILogger<RecipeImportService>? logger = null)
     {
         _httpClientFactory = httpClientFactory;
         _aiImportService = aiImportService;
         _imageFetchService = imageFetchService;
         _storageService = storageService;
+        _logger = logger;
     }
 
     public async Task<RecipeDraftDto> ImportFromUrlAsync(string url, Household household, Guid? userId = null)
@@ -59,12 +63,29 @@ public class RecipeImportService
         }
         else if (HasAiSettings(household))
         {
+            var htmlHasIngredientsTable = html.Contains("ingredients-table", StringComparison.OrdinalIgnoreCase);
+            var extractedRows = CountIngredientRowsInHtml(html);
             var readableText = ExtractReadableText(html);
+            var readableHasIngredientSection = readableText.Contains("Ingredients table rows:", StringComparison.Ordinal);
             var wasTruncated = readableText.Length > 100_000;
             if (wasTruncated)
             {
                 readableText = readableText[..100_000];
             }
+
+            _logger?.LogInformation(
+                "AI import diagnostics for {Url}: htmlHasIngredientsTable={HtmlHasIngredientsTable}, extractedIngredientRows={ExtractedRows}, readableHasIngredientSection={ReadableHasIngredientSection}, readableLength={ReadableLength}, truncated={Truncated}",
+                url,
+                htmlHasIngredientsTable,
+                extractedRows,
+                readableHasIngredientSection,
+                readableText.Length,
+                wasTruncated);
+
+            _logger?.LogDebug(
+                "AI readable text preview for {Url}: {ReadableTextPreview}",
+                url,
+                BuildPreview(readableText, 1500));
 
             draft = await _aiImportService.ImportAsync(
                 household.AiProvider!,
@@ -116,6 +137,10 @@ public class RecipeImportService
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
 
+        // Capture ingredient rows first. Some sites place recipe tables inside <noscript>,
+        // and we remove noscript nodes in the cleanup phase below.
+        var ingredientLines = ExtractIngredientTableLines(doc);
+
         var junkNodes = doc.DocumentNode.SelectNodes("//script|//style|//nav|//header|//footer|//noscript");
         if (junkNodes != null)
         {
@@ -126,6 +151,12 @@ public class RecipeImportService
         }
 
         var segments = new List<string>();
+        if (ingredientLines.Count > 0)
+        {
+            segments.Add("Ingredients table rows:");
+            segments.AddRange(ingredientLines);
+        }
+
         var main = doc.DocumentNode.SelectSingleNode("//main") ?? doc.DocumentNode;
         var mainText = NormalizeText(main.InnerText);
         if (!string.IsNullOrWhiteSpace(mainText))
@@ -133,27 +164,38 @@ public class RecipeImportService
             segments.Add(mainText);
         }
 
-        var ingredientRows = doc.DocumentNode.SelectNodes(
-            "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ingredients-table')]//tr");
-        if (ingredientRows != null)
+        return string.Join('\n', segments.Where(s => !string.IsNullOrWhiteSpace(s)));
+    }
+
+    private static List<string> ExtractIngredientTableLines(HtmlDocument doc)
+    {
+        var rows = doc.DocumentNode.SelectNodes(
+            "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ingredients-table')]//tr" +
+            " | //table[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ingredient')]//tr");
+
+        if (rows == null || rows.Count == 0)
         {
-            foreach (var row in ingredientRows)
-            {
-                var cells = row.SelectNodes("./th|./td|.//th|.//td");
-                if (cells == null || cells.Count == 0) continue;
-
-                var rowText = string.Join(" ",
-                    cells.Select(c => NormalizeText(c.InnerText))
-                        .Where(t => !string.IsNullOrWhiteSpace(t)));
-
-                if (!string.IsNullOrWhiteSpace(rowText))
-                {
-                    segments.Add(rowText);
-                }
-            }
+            return new List<string>();
         }
 
-        return string.Join('\n', segments.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var lines = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var row in rows)
+        {
+            var cells = row.SelectNodes("./th|./td") ?? row.SelectNodes(".//th|.//td");
+            if (cells == null || cells.Count == 0) continue;
+
+            var rowText = string.Join(" ",
+                cells.Select(c => NormalizeText(c.InnerText))
+                    .Where(t => !string.IsNullOrWhiteSpace(t)));
+
+            if (string.IsNullOrWhiteSpace(rowText)) continue;
+            if (!seen.Add(rowText)) continue;
+            lines.Add(rowText);
+        }
+
+        return lines;
     }
 
     private static string NormalizeText(string text)
@@ -163,6 +205,19 @@ public class RecipeImportService
             decoded.Split('\n', '\r', '\t')
                 .Select(t => t.Trim())
                 .Where(t => t.Length > 0));
+    }
+
+    private static string BuildPreview(string text, int maxChars)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        return text.Length <= maxChars ? text : $"{text[..maxChars]}...[TRUNCATED]";
+    }
+
+    private static int CountIngredientRowsInHtml(string html)
+    {
+        var doc = new HtmlDocument();
+        doc.LoadHtml(html);
+        return ExtractIngredientTableLines(doc).Count;
     }
 
     private RecipeDraftDto? TryParseJsonLd(string html)
