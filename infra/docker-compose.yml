@@ -17,7 +17,7 @@ services:
     image: dpage/pgadmin4:latest
     container_name: recipemanager-pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@recipemanager.local
+      PGADMIN_DEFAULT_EMAIL: thomas@tzis.net
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"

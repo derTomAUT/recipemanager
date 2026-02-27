@@ -9,7 +9,7 @@ export const routes: Routes = [
   { path: '', redirectTo: '/home', pathMatch: 'full' },
   { path: 'recipes', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-list/recipe-list.component').then(m => m.RecipeListComponent) },
   { path: 'debug', canActivate: [authGuard], loadComponent: () => import('./pages/debug/debug.component').then(m => m.DebugComponent) },
-  { path: 'logs', canActivate: [authGuard], redirectTo: 'debug' },
+  { path: 'logs', redirectTo: 'debug' },
   { path: 'recipes/new', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-editor/recipe-editor.component').then(m => m.RecipeEditorComponent) },
   { path: 'recipes/:id', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-detail/recipe-detail.component').then(m => m.RecipeDetailComponent) },
   { path: 'recipes/:id/edit', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-editor/recipe-editor.component').then(m => m.RecipeEditorComponent) },
