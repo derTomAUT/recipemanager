@@ -1,14 +1,17 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { RecipeService } from '../../services/recipe.service';
 import { AuthService } from '../../services/auth.service';
 import { Recipe } from '../../models/recipe.model';
+import { RecipeImportService } from '../../services/recipe-import.service';
+import { RecipeDraftService } from '../../services/recipe-draft.service';
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, FormsModule],
   template: `
     <div class="home-page">
       <section class="hero">
@@ -17,7 +20,8 @@ import { Recipe } from '../../models/recipe.model';
           <h1>Cook with intention, save with flavor.</h1>
           <p class="hero-subtitle">Import recipes, curate your favorites, and let the kitchen feel like home.</p>
           <div class="hero-actions">
-            <a routerLink="/recipes/new" class="btn btn-primary">Import Recipe</a>
+            <button class="btn btn-primary" type="button" (click)="openImportModal()">Import Recipe</button>
+            <a routerLink="/recipes/new" class="btn btn-secondary">New Recipe</a>
             <a routerLink="/recipes" class="btn btn-secondary">Browse All</a>
           </div>
         </div>
@@ -68,6 +72,28 @@ import { Recipe } from '../../models/recipe.model';
           <p>No recommendations yet. <a routerLink="/recipes/new">Add some recipes</a> or <a routerLink="/preferences">set your preferences</a>!</p>
         </div>
       </section>
+
+      <div class="modal-backdrop" *ngIf="showImportModal" (click)="closeImportModal()">
+        <div class="import-modal" role="dialog" aria-modal="true" aria-labelledby="import-modal-title" (click)="$event.stopPropagation()">
+          <h3 id="import-modal-title">Import Recipe From URL</h3>
+          <p class="modal-subtitle">Paste a recipe URL to import and open it in the editor as a draft.</p>
+          <input
+            type="url"
+            [(ngModel)]="importUrl"
+            [disabled]="importing"
+            placeholder="https://example.com/recipe"
+            (keyup.enter)="importFromUrl()"
+          />
+          <div *ngIf="importError" class="modal-error">{{ importError }}</div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" (click)="closeImportModal()" [disabled]="importing">Cancel</button>
+            <button class="btn btn-primary" type="button" (click)="importFromUrl()" [disabled]="importing">
+              <span *ngIf="importing" class="spinner" aria-hidden="true"></span>
+              {{ importing ? 'Importing...' : 'Import' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -96,6 +122,15 @@ import { Recipe } from '../../models/recipe.model';
     .meta { font-size: 0.85rem; color: var(--muted); display: flex; gap: 1rem; }
     .loading, .error, .empty-state { padding: 2rem; text-align: center; }
     .error { background: rgba(217,80,47,0.15); color: var(--text); border-radius: var(--radius-md); }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 1200; }
+    .import-modal { width: min(560px, 100%); background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 1.25rem; border: 1px solid rgba(0,0,0,0.08); }
+    .import-modal h3 { margin: 0 0 0.5rem; }
+    .modal-subtitle { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.95rem; }
+    .import-modal input { width: 100%; min-height: 44px; }
+    .modal-actions { margin-top: 1rem; display: flex; justify-content: flex-end; gap: 0.6rem; }
+    .modal-error { margin-top: 0.65rem; background: rgba(217,80,47,0.15); color: var(--text); border-radius: var(--radius-sm); padding: 0.55rem 0.7rem; font-size: 0.9rem; }
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.45); border-top-color: currentColor; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     @media (max-width: 900px) {
       .hero { grid-template-columns: 1fr; }
@@ -108,10 +143,17 @@ export class HomeComponent implements OnInit {
   loading = false;
   error = '';
   isOwner = false;
+  showImportModal = false;
+  importUrl = '';
+  importing = false;
+  importError = '';
 
   constructor(
     private recipeService: RecipeService,
     private authService: AuthService,
+    private recipeImportService: RecipeImportService,
+    private recipeDraftService: RecipeDraftService,
+    private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -133,6 +175,44 @@ export class HomeComponent implements OnInit {
       error: () => {
         this.error = 'Failed to load recommendations';
         this.loading = false;
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  openImportModal() {
+    this.showImportModal = true;
+    this.importError = '';
+    this.cdr.detectChanges();
+  }
+
+  closeImportModal() {
+    if (this.importing) return;
+    this.showImportModal = false;
+    this.importError = '';
+    this.cdr.detectChanges();
+  }
+
+  importFromUrl() {
+    const trimmedUrl = this.importUrl.trim();
+    if (!trimmedUrl) {
+      this.importError = 'Please enter a URL.';
+      return;
+    }
+
+    this.importing = true;
+    this.importError = '';
+    this.recipeImportService.importFromUrl(trimmedUrl).subscribe({
+      next: draft => {
+        this.recipeDraftService.setDraft(draft);
+        this.importing = false;
+        this.showImportModal = false;
+        this.importUrl = '';
+        this.router.navigate(['/recipes/new']);
+      },
+      error: () => {
+        this.importing = false;
+        this.importError = 'Failed to import recipe from URL.';
         this.cdr.detectChanges();
       }
     });
