@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, tap } from 'rxjs';
+import { BehaviorSubject, Observable, finalize, of, shareReplay, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 interface User {
@@ -22,6 +22,7 @@ export class AuthService {
   private tokenKey = 'auth_token';
   private userSubject = new BehaviorSubject<User | null>(this.getStoredUser());
   public user$ = this.userSubject.asObservable();
+  private refreshInFlight?: Observable<AuthResponse>;
 
   constructor(private http: HttpClient) {}
 
@@ -61,6 +62,27 @@ export class AuthService {
     if (!payload?.exp) return true;
     const nowSeconds = Math.floor(Date.now() / 1000);
     return payload.exp <= nowSeconds;
+  }
+
+  getTokenExpiry(token: string): number | null {
+    const payload = this.getTokenPayload(token);
+    return payload?.exp ? payload.exp * 1000 : null;
+  }
+
+  refreshTokenIfNeeded(bufferSeconds: number = 300): Observable<AuthResponse | null> {
+    const token = this.getToken();
+    if (!token) return of(null);
+    const expMs = this.getTokenExpiry(token);
+    if (!expMs) return of(null);
+    const now = Date.now();
+    if (expMs - now > bufferSeconds * 1000) return of(null);
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.refreshToken().pipe(
+        finalize(() => this.refreshInFlight = undefined),
+        shareReplay(1)
+      );
+    }
+    return this.refreshInFlight;
   }
 
   private getTokenPayload(token: string): { exp?: number } | null {
