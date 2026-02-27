@@ -1,4 +1,29 @@
 services:
+  traefik:
+    image: traefik:v3.2
+    container_name: recipemanager-traefik
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    command:
+      - --api=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.websecure.address=:8081
+      - --certificatesresolvers.dnsresolver.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.dnsresolver.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.dnsresolver.acme.dnschallenge=true
+      - --certificatesresolvers.dnsresolver.acme.dnschallenge.provider=acme-dns
+    environment:
+      ACME_DNS_API_BASE: ${ACME_DNS_API_BASE}
+      ACME_DNS_STORAGE_PATH: /letsencrypt/acmedns.json
+    ports:
+      - "${APP_PORT:-8081}:8081"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - recipemanager_letsencrypt:/letsencrypt
+      - ./acmedns.json:/letsencrypt/acmedns.json
+
   postgres:
     image: postgres:16-alpine
     container_name: recipemanager-postgres
@@ -50,10 +75,16 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "${APP_PORT:-8082}:80"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.recipemanager.rule=Host(`${PUBLIC_HOST}`)
+      - traefik.http.routers.recipemanager.entrypoints=websecure
+      - traefik.http.routers.recipemanager.tls=true
+      - traefik.http.routers.recipemanager.tls.certresolver=dnsresolver
+      - traefik.http.services.recipemanager.loadbalancer.server.port=80
 
 volumes:
   recipemanager_postgres_data:
   recipemanager_uploads:
   recipemanager_logs:
+  recipemanager_letsencrypt:

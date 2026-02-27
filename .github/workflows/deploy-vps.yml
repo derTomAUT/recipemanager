@@ -16,7 +16,11 @@ jobs:
           APP_DIR: ${{ secrets.VPS_APP_DIR }}
           REPO_URL: ${{ secrets.VPS_REPO_URL }}
           APP_PORT: ${{ secrets.APP_PORT }}
+          PUBLIC_HOST: ${{ secrets.PUBLIC_HOST }}
           PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN }}
+          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+          ACME_DNS_API_BASE: ${{ secrets.ACME_DNS_API_BASE }}
+          ACME_DNS_STORAGE_JSON: ${{ secrets.ACME_DNS_STORAGE_JSON }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -30,7 +34,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT }}
-          envs: APP_DIR,REPO_URL,APP_PORT,PUBLIC_ORIGIN,POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,JWT_SECRET,JWT_ISSUER,JWT_AUDIENCE,JWT_EXPIRY_MINUTES,GOOGLE_CLIENT_ID
+          envs: APP_DIR,REPO_URL,APP_PORT,PUBLIC_HOST,PUBLIC_ORIGIN,ACME_EMAIL,ACME_DNS_API_BASE,ACME_DNS_STORAGE_JSON,POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,JWT_SECRET,JWT_ISSUER,JWT_AUDIENCE,JWT_EXPIRY_MINUTES,GOOGLE_CLIENT_ID
           script: |
             set -euo pipefail
 
@@ -48,8 +52,11 @@ jobs:
             git reset --hard origin/master
 
             cat > infra/.env <<EOF
-            APP_PORT=${APP_PORT:-8082}
+            APP_PORT=${APP_PORT:-8081}
+            PUBLIC_HOST=${PUBLIC_HOST}
             PUBLIC_ORIGIN=${PUBLIC_ORIGIN}
+            ACME_EMAIL=${ACME_EMAIL}
+            ACME_DNS_API_BASE=${ACME_DNS_API_BASE}
             POSTGRES_DB=${POSTGRES_DB}
             POSTGRES_USER=${POSTGRES_USER}
             POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -60,10 +67,12 @@ jobs:
             GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
             EOF
 
+            printf "%s" "${ACME_DNS_STORAGE_JSON}" > infra/acmedns.json
+
             echo "=== Deploy Diagnostics ==="
-            echo "APP_PORT=${APP_PORT:-8082}"
+            echo "APP_PORT=${APP_PORT:-8081}"
             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-            ss -ltnp | grep -E ":(${APP_PORT:-8082}|80|443)\\s" || true
+            ss -ltnp | grep -E ":(${APP_PORT:-8081}|80|443)\\s" || true
             docker compose -f infra/docker-compose.prod.yml --env-file infra/.env config
 
             docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d --build

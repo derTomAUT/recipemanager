@@ -22,3 +22,4 @@ Thumbs.db
 # Logs
 *.log
 .worktrees/
+infra/acmedns.json

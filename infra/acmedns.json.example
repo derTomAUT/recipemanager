@@ -1,0 +1,8 @@
+{
+  "recipe.weit-weg.at": {
+    "username": "replace_with_acme_dns_username",
+    "password": "replace_with_acme_dns_password",
+    "subdomain": "replace_with_acme_dns_subdomain",
+    "fulldomain": "replace_with_acme_dns_fulldomain"
+  }
+}
