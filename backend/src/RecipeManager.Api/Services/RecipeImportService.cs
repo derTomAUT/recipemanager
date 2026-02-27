@@ -475,13 +475,16 @@ public class RecipeImportService
         var srcSetAttributes = new[] { "srcset", "data-srcset", "data-lazy-srcset" };
         foreach (var attribute in srcSetAttributes)
         {
-            AddCandidatesFromSrcSet(img.GetAttributeValue(attribute, null), candidates, seen, baseUri);
+            AddBestCandidateFromSrcSet(img.GetAttributeValue(attribute, null), candidates, seen, baseUri);
         }
     }
 
-    private static void AddCandidatesFromSrcSet(string? srcSet, List<string> candidates, HashSet<string> seen, Uri baseUri)
+    private static void AddBestCandidateFromSrcSet(string? srcSet, List<string> candidates, HashSet<string> seen, Uri baseUri)
     {
         if (string.IsNullOrWhiteSpace(srcSet)) return;
+
+        string? bestUrl = null;
+        var bestWidth = -1;
 
         foreach (var part in srcSet.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -491,8 +494,32 @@ public class RecipeImportService
             // srcset item format: "<url> <descriptor>" (descriptor optional)
             var firstSpace = trimmed.IndexOf(' ');
             var url = firstSpace > 0 ? trimmed[..firstSpace] : trimmed;
-            AddCandidate(url, candidates, seen, baseUri);
+            var descriptor = firstSpace > 0 ? trimmed[(firstSpace + 1)..].Trim() : string.Empty;
+            var width = TryParseWidthDescriptor(descriptor);
+            if (width > bestWidth)
+            {
+                bestWidth = width;
+                bestUrl = url;
+            }
         }
+
+        AddCandidate(bestUrl, candidates, seen, baseUri);
+    }
+
+    private static int TryParseWidthDescriptor(string descriptor)
+    {
+        // Prefer numeric width descriptors like "731w". Unknown descriptors are ranked lowest.
+        if (string.IsNullOrWhiteSpace(descriptor)) return 0;
+        if (descriptor.EndsWith("w", StringComparison.OrdinalIgnoreCase))
+        {
+            var numeric = descriptor[..^1];
+            if (int.TryParse(numeric, out var width))
+            {
+                return width;
+            }
+        }
+
+        return 0;
     }
 
     private async Task<ImageImportResult> TryImportImagesAsync(

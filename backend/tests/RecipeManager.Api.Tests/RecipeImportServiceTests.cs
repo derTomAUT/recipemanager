@@ -131,7 +131,7 @@ public class RecipeImportServiceTests
         var candidates = service.ExtractImageCandidates(html, new Uri("https://example.com/recipe"));
 
         Assert.Contains("https://example.com/images/ranch-main.jpg", candidates);
-        Assert.Contains("https://example.com/images/ranch-small.jpg", candidates);
+        Assert.DoesNotContain("https://example.com/images/ranch-small.jpg", candidates);
         Assert.DoesNotContain(candidates, c => c.StartsWith("data:", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -148,7 +148,23 @@ public class RecipeImportServiceTests
         var candidates = service.ExtractImageCandidates(html, new Uri("https://example.com/recipe"));
 
         Assert.Contains("https://example.com/images/step1.jpg", candidates);
-        Assert.Contains("https://example.com/images/step1-small.jpg", candidates);
+        Assert.DoesNotContain("https://example.com/images/step1-small.jpg", candidates);
+    }
+
+    [Fact]
+    public async Task FetchImagesAsync_DeduplicatesIdenticalImageBytes()
+    {
+        var imageA = "https://example.com/images/a.jpg";
+        var imageB = "https://example.com/images/b.jpg";
+        var bytes = new byte[] { 1, 2, 3, 4, 5 };
+        var handler = new DuplicateImageBytesHandler(imageA, imageB, bytes);
+        var client = new HttpClient(handler);
+        var factory = new RecordingHttpClientFactory(client);
+        var fetchService = new ImageFetchService(factory);
+
+        var results = await fetchService.FetchImagesAsync(new[] { imageA, imageB }, pageUri: new Uri("https://example.com/recipe"));
+
+        Assert.Single(results);
     }
 
     [Fact]
@@ -281,6 +297,33 @@ public class RecipeImportServiceTests
             {
                 // Force AI selection call to fail so the import path uses non-AI fallback image selection.
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    private sealed class DuplicateImageBytesHandler : HttpMessageHandler
+    {
+        private readonly string _imageA;
+        private readonly string _imageB;
+        private readonly byte[] _bytes;
+
+        public DuplicateImageBytesHandler(string imageA, string imageB, byte[] bytes)
+        {
+            _imageA = imageA;
+            _imageB = imageB;
+            _bytes = bytes;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var requestUrl = request.RequestUri?.ToString() ?? string.Empty;
+            if (requestUrl == _imageA || requestUrl == _imageB)
+            {
+                var content = new ByteArrayContent(_bytes);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));

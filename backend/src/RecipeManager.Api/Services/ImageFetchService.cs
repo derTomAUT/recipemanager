@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 namespace RecipeManager.Api.Services;
 
 public record FetchedImage(
@@ -24,6 +25,7 @@ public class ImageFetchService
         var client = _factory.CreateClient();
         var results = new List<FetchedImage>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenHashes = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var url in urls)
         {
@@ -42,6 +44,9 @@ public class ImageFetchService
 
                 var bytes = await response.Content.ReadAsByteArrayAsync();
                 if (bytes.Length == 0 || bytes.Length > maxBytes) continue;
+
+                var hash = Convert.ToHexString(SHA256.HashData(bytes));
+                if (!seenHashes.Add(hash)) continue;
 
                 results.Add(new FetchedImage(url, bytes, contentType));
             }
