@@ -18,7 +18,8 @@ public class ImageFetchService
     public async Task<List<FetchedImage>> FetchImagesAsync(
         IEnumerable<string> urls,
         int maxImages = 30,
-        int maxBytes = 1_000_000)
+        int maxBytes = 1_000_000,
+        Uri? pageUri = null)
     {
         var client = _factory.CreateClient();
         var results = new List<FetchedImage>();
@@ -31,7 +32,9 @@ public class ImageFetchService
 
             try
             {
-                using var response = await client.GetAsync(url);
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                AddBrowserHeaders(request, pageUri);
+                using var response = await client.SendAsync(request);
                 if (!response.IsSuccessStatusCode) continue;
 
                 var contentType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
@@ -49,5 +52,13 @@ public class ImageFetchService
         }
 
         return results;
+    }
+
+    private static void AddBrowserHeaders(HttpRequestMessage request, Uri? pageUri)
+    {
+        request.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+        request.Headers.Accept.ParseAdd("image/avif,image/webp,image/apng,image/*,*/*;q=0.8");
+        request.Headers.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
+        request.Headers.Referrer = pageUri;
     }
 }

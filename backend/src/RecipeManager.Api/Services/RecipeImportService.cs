@@ -507,7 +507,7 @@ public class RecipeImportService
             var candidates = ExtractImageCandidates(html, baseUri);
             if (candidates.Count == 0) return new ImageImportResult();
 
-            var fetched = await _imageFetchService.FetchImagesAsync(candidates, maxImages: 20);
+            var fetched = await _imageFetchService.FetchImagesAsync(candidates, maxImages: 20, pageUri: baseUri);
             if (fetched.Count == 0) return new ImageImportResult();
 
             AiImageSelection? selection = null;
