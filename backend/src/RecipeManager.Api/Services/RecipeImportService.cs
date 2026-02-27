@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 using RecipeManager.Api.DTOs;
 using RecipeManager.Api.Infrastructure.Storage;
@@ -9,6 +10,8 @@ namespace RecipeManager.Api.Services;
 
 public class RecipeImportService
 {
+    private static readonly Regex SizedFileSuffixRegex = new("-(\\d+)x(\\d+)(?=\\.[^.]+$)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AiRecipeImportService _aiImportService;
     private readonly ImageFetchService _imageFetchService;
@@ -401,7 +404,7 @@ public class RecipeImportService
             }
         }
 
-        return candidates;
+        return SelectBestCandidates(candidates);
     }
 
     private static void CollectImageCandidates(JsonElement imageEl, List<string> candidates, HashSet<string> seen, Uri baseUri)
@@ -517,6 +520,68 @@ public class RecipeImportService
             {
                 return width;
             }
+        }
+
+        return 0;
+    }
+
+    private static List<string> SelectBestCandidates(List<string> candidates)
+    {
+        var bestByKey = new Dictionary<string, (string Url, int Score, int FirstIndex)>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var url = candidates[i];
+            var key = BuildImageIdentityKey(url);
+            var score = ScoreImageQuality(url);
+
+            if (!bestByKey.TryGetValue(key, out var existing))
+            {
+                bestByKey[key] = (url, score, i);
+                continue;
+            }
+
+            if (score > existing.Score)
+            {
+                // Keep the original list position stable while upgrading to the better quality variant.
+                bestByKey[key] = (url, score, existing.FirstIndex);
+            }
+        }
+
+        return bestByKey.Values
+            .OrderBy(v => v.FirstIndex)
+            .Select(v => v.Url)
+            .ToList();
+    }
+
+    private static string BuildImageIdentityKey(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return url;
+        }
+
+        var path = uri.AbsolutePath;
+        var directory = Path.GetDirectoryName(path)?.Replace('\\', '/') ?? string.Empty;
+        var fileName = Path.GetFileName(path);
+        var normalizedName = SizedFileSuffixRegex.Replace(fileName, string.Empty);
+        return $"{uri.Scheme}://{uri.Host}{directory}/{normalizedName}".ToLowerInvariant();
+    }
+
+    private static int ScoreImageQuality(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return 0;
+        }
+
+        var fileName = Path.GetFileName(uri.AbsolutePath);
+        var sizedMatch = SizedFileSuffixRegex.Match(fileName);
+        if (sizedMatch.Success &&
+            int.TryParse(sizedMatch.Groups[1].Value, out var width) &&
+            int.TryParse(sizedMatch.Groups[2].Value, out var height))
+        {
+            return width * height;
         }
 
         return 0;

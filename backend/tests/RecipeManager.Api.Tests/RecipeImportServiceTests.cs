@@ -168,6 +168,23 @@ public class RecipeImportServiceTests
     }
 
     [Fact]
+    public void ExtractImageCandidates_DeduplicatesWordPressSizeVariants()
+    {
+        var html = @"
+<html><body><main>
+  <img src=""https://example.com/wp-content/uploads/2026/02/ranch-dip-214x300.jpg"" />
+  <img data-lazy-src=""https://example.com/wp-content/uploads/2026/02/ranch-dip-731x1024.jpg"" />
+  <img data-jpibfi-src=""https://example.com/wp-content/uploads/2026/02/ranch-dip-1097x1536.jpg"" />
+</main></body></html>";
+
+        var service = CreateService();
+        var candidates = service.ExtractImageCandidates(html, new Uri("https://example.com/recipe"));
+
+        Assert.Single(candidates);
+        Assert.Equal("https://example.com/wp-content/uploads/2026/02/ranch-dip-1097x1536.jpg", candidates[0]);
+    }
+
+    [Fact]
     public async Task ImportFromUrlAsync_FetchesProtectedImagesWithBrowserHeaders()
     {
         var pageUrl = "https://example.com/recipe";
