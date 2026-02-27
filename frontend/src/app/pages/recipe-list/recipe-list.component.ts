@@ -23,8 +23,10 @@ import { RecipeDraftService } from '../../services/recipe-draft.service';
           type="url"
           [(ngModel)]="importUrl"
           placeholder="Paste recipe URL..."
+          [disabled]="importing"
         />
         <button (click)="importFromUrl()" [disabled]="importing">
+          <span *ngIf="importing" class="spinner" aria-hidden="true"></span>
           {{ importing ? 'Importing...' : 'Import from URL' }}
         </button>
       </div>
@@ -89,7 +91,8 @@ import { RecipeDraftService } from '../../services/recipe-draft.service';
     .search-bar button { padding: 0.75rem 1rem; min-height: 44px; }
     .import-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
     .import-bar input { flex: 1; padding: 0.5rem; min-height: 44px; }
-    .import-bar button { padding: 0.75rem 1rem; min-height: 44px; }
+    .import-bar button { padding: 0.75rem 1rem; min-height: 44px; display: inline-flex; align-items: center; gap: 0.5rem; }
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.5); border-top-color: currentColor; border-radius: 50%; animation: spin 0.8s linear infinite; }
     .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
     .recipe-card { position: relative; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s; }
     .recipe-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -109,6 +112,7 @@ import { RecipeDraftService } from '../../services/recipe-draft.service';
     .empty-state { text-align: center; padding: 2rem; color: #666; }
     .loading { text-align: center; padding: 2rem; }
     .error { color: #dc3545; text-align: center; padding: 1rem; background: #f8d7da; border-radius: 4px; margin-top: 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 600px) { .recipe-grid { grid-template-columns: 1fr; } }
   `]
 })
