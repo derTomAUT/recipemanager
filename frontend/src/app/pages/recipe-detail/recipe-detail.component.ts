@@ -38,9 +38,9 @@ import { RecipeDetail } from '../../models/recipe.model';
           </div>
         </section>
 
-        <section class="images" *ngIf="recipe.images.length">
-          <div class="image-gallery">
-            <img *ngFor="let img of recipe.images" [src]="img.url" [alt]="recipe.title" />
+        <section class="images" *ngIf="heroImage">
+          <div class="hero-image">
+            <img [src]="heroImage.url" [alt]="recipe.title" />
           </div>
         </section>
 
@@ -57,22 +57,22 @@ import { RecipeDetail } from '../../models/recipe.model';
 
         <section class="steps">
           <h2>Instructions</h2>
-          <ol class="step-list">
-            <li *ngFor="let step of recipe.steps; let i = index" class="step">
-              <div class="step-number">{{ i + 1 }}</div>
-              <div class="step-body">
-                <div class="step-image" *ngIf="getStepImage(i) as stepImage">
-                  <div class="step-carousel">
-                    <img [src]="stepImage.url" [alt]="recipe.title + ' step ' + (i + 1)" />
-                  </div>
-                </div>
+          <div class="steps-layout">
+            <ol class="step-list">
+              <li *ngFor="let step of recipe.steps; let i = index" class="step">
+                <div class="step-number">{{ i + 1 }}</div>
                 <div class="step-content">
                   <p>{{ step.instruction }}</p>
                   <span *ngIf="step.timerSeconds" class="timer">Timer: {{ formatTime(step.timerSeconds) }}</span>
                 </div>
+              </li>
+            </ol>
+            <div class="step-rail" *ngIf="stepImages.length">
+              <div class="step-rail-item" *ngFor="let img of stepImages">
+                <img [src]="img.url" [alt]="recipe.title + ' step image'" />
               </div>
-            </li>
-          </ol>
+            </div>
+          </div>
         </section>
       </div>
 
@@ -100,22 +100,20 @@ import { RecipeDetail } from '../../models/recipe.model';
     .tags { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
     .tag { background: var(--surface-2); padding: 0.25rem 0.5rem; border-radius: 999px; font-size: 0.85rem; color: var(--muted); }
     .images { margin: 1rem 0; }
-    .image-gallery { display: flex; gap: 0.5rem; overflow-x: auto; }
-    .image-gallery img { max-height: 300px; border-radius: 8px; }
+    .hero-image img { width: 100%; max-height: 380px; object-fit: cover; border-radius: 12px; }
     .ingredients, .steps { margin: 1.5rem 0; }
     .ingredients h2, .steps h2 { font-size: 1.25rem; margin-bottom: 1rem; }
     .ingredient-list { list-style: none; padding: 0; }
     .ingredient-list li { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); display: flex; gap: 0.5rem; }
     .quantity { font-weight: 500; min-width: 80px; }
     .notes { color: var(--muted); font-size: 0.9rem; }
-    .step-list { list-style: none; padding: 0; counter-reset: step; }
+    .steps-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px); gap: 1.5rem; align-items: stretch; }
+    .step-list { list-style: none; padding: 0; counter-reset: step; margin: 0; }
     .step { display: grid; grid-template-columns: 32px 1fr; gap: 1rem; padding: 1rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); }
     .step-number { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
-    .step-body { display: grid; grid-template-columns: minmax(0, 220px) 1fr; gap: 1rem; align-items: start; }
-    .step-image { position: relative; }
-    .step-carousel { display: flex; gap: 0.5rem; overflow-x: auto; scroll-snap-type: x mandatory; }
-    .step-carousel img { width: 100%; max-width: 220px; height: 140px; object-fit: cover; border-radius: 10px; scroll-snap-align: start; }
     .step-content { flex: 1; }
+    .step-rail { display: flex; flex-direction: column; justify-content: space-between; gap: 0.75rem; }
+    .step-rail-item img { width: 100%; height: 140px; object-fit: cover; border-radius: 12px; }
     .step-content p { margin: 0; font-size: 1.1rem; line-height: 1.6; }
     .timer { color: var(--primary); font-size: 0.9rem; margin-top: 0.5rem; display: inline-block; }
     .back-link { display: inline-block; margin-top: 2rem; color: var(--primary); }
@@ -123,9 +121,11 @@ import { RecipeDetail } from '../../models/recipe.model';
     .error { color: var(--text); text-align: center; padding: 1rem; background: rgba(217,80,47,0.15); border-radius: 4px; }
     .not-found { text-align: center; padding: 2rem; color: var(--muted); }
     .not-found a { color: var(--primary); }
-    @media (max-width: 800px) {
-      .step-body { grid-template-columns: 1fr; }
-      .step-carousel img { max-width: 85vw; }
+    @media (max-width: 900px) {
+      .steps-layout { grid-template-columns: 1fr; }
+      .step-rail { flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 0.5rem; }
+      .step-rail-item { scroll-snap-align: start; flex: 0 0 auto; }
+      .step-rail-item img { width: 240px; height: 150px; }
     }
     @media (max-width: 600px) {
       .sticky-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
@@ -138,6 +138,8 @@ export class RecipeDetailComponent implements OnInit {
   loading = false;
   error = '';
   marking = false;
+  heroImage: { url: string } | null = null;
+  stepImages: { url: string }[] = [];
 
   constructor(
     private route: ActivatedRoute,
@@ -161,6 +163,11 @@ export class RecipeDetailComponent implements OnInit {
     this.recipeService.getRecipe(id).subscribe({
       next: (recipe) => {
         this.recipe = recipe;
+        this.heroImage = this.recipe.images.find(img => img.isTitleImage)
+          ?? this.recipe.images.find(img => img.orderIndex === 0)
+          ?? null;
+        this.stepImages = this.recipe.images
+          .filter(img => !img.isTitleImage && img.orderIndex !== 0);
         this.loading = false;
         this.cdr.detectChanges();
       },
@@ -192,10 +199,6 @@ export class RecipeDetailComponent implements OnInit {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-  }
-
-  getStepImage(stepIndex: number) {
-    return this.recipe?.images.find(img => img.orderIndex === stepIndex + 1);
   }
 
   markCooked() {
