@@ -309,17 +309,28 @@ public class HouseholdController : ControllerBase
             return Forbid();
         }
 
-        if (targetUserId == currentUserId.Value)
-        {
-            return BadRequest("Owner cannot disable themselves");
-        }
-
         var targetMembership = await _db.HouseholdMembers
             .FirstOrDefaultAsync(hm => hm.UserId == targetUserId && hm.HouseholdId == currentMembership.HouseholdId);
 
         if (targetMembership == null)
         {
             return NotFound("Member not found in household");
+        }
+
+        if (targetMembership.IsActive)
+        {
+            var activeCount = await _db.HouseholdMembers
+                .CountAsync(hm => hm.HouseholdId == currentMembership.HouseholdId && hm.IsActive);
+
+            if (activeCount <= 1)
+            {
+                return BadRequest("At least one active member must remain in the household");
+            }
+        }
+
+        if (targetUserId == currentUserId.Value)
+        {
+            return BadRequest("Owner cannot disable themselves");
         }
 
         targetMembership.IsActive = false;

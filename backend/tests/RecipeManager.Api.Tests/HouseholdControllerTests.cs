@@ -54,8 +54,10 @@ public class HouseholdControllerTests
     {
         await using var db = CreateDb();
         var owner = CreateUser(db, "owner3@test.com");
+        var other = CreateUser(db, "member3@test.com");
         var household = CreateHousehold(db);
         CreateMember(db, household.Id, owner.Id, "Owner");
+        CreateMember(db, household.Id, other.Id, "Member");
         await db.SaveChangesAsync();
 
         var controller = CreateController(db, owner.Id);
@@ -63,6 +65,24 @@ public class HouseholdControllerTests
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.Equal("Owner cannot disable themselves", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task DisableMember_RejectsWhenItWouldLeaveNoActiveMembers()
+    {
+        await using var db = CreateDb();
+        var owner = CreateUser(db, "owner4@test.com");
+        var target = CreateUser(db, "member4@test.com");
+        var household = CreateHousehold(db);
+        CreateMember(db, household.Id, owner.Id, "Owner");
+        CreateMember(db, household.Id, target.Id, "Member", isActive: false);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, owner.Id);
+        var result = await controller.DisableMember(owner.Id);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("At least one active member must remain in the household", badRequest.Value);
     }
 
     private static AppDbContext CreateDb()

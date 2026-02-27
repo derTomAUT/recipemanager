@@ -104,33 +104,33 @@ import { buildHouseholdInviteLink } from './household-settings.utils';
     .settings-page { padding: 1rem; max-width: 720px; margin: 0 auto; }
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
     .page-header h1 { margin: 0; }
-    .btn-secondary { padding: 0.5rem 1rem; min-height: 44px; display: inline-flex; align-items: center; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }
-    .btn-primary { padding: 0.75rem 1.5rem; min-height: 44px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+    .btn-secondary { padding: 0.5rem 1rem; min-height: 44px; display: inline-flex; align-items: center; background: var(--surface-2); color: var(--text); text-decoration: none; border-radius: var(--radius-sm); border: none; cursor: pointer; }
+    .btn-primary { padding: 0.75rem 1.5rem; min-height: 44px; background: var(--primary); color: white; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 1rem; }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
     .loading { text-align: center; padding: 2rem; }
-    .error { background: #f8d7da; color: #721c24; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
-    .message { background: #d4edda; color: #155724; padding: 1rem; border-radius: 4px; margin-bottom: 1rem; }
-    .error-inline { color: #dc3545; font-size: 0.9rem; }
+    .error { background: color-mix(in srgb, var(--primary) 20%, var(--surface)); color: var(--text); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; }
+    .message { background: color-mix(in srgb, var(--secondary) 20%, var(--surface)); color: var(--text); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; }
+    .error-inline { color: var(--primary); font-size: 0.9rem; }
 
-    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; }
+    .card { background: var(--surface); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); border-radius: var(--radius-md); padding: 1.5rem; box-shadow: var(--shadow-soft); }
     .card h2 { margin-top: 0; }
-    .help { color: #666; margin-top: 0.25rem; }
+    .help { color: var(--muted); margin-top: 0.25rem; }
 
     .field { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
     .field-inline { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
-    select, input { padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; min-height: 40px; font-size: 1rem; }
+    select, input { padding: 0.5rem; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); border-radius: var(--radius-sm); min-height: 40px; font-size: 1rem; background: var(--surface-2); color: var(--text); }
     input { width: 100%; }
 
     .actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-    .hint { color: #666; font-size: 0.9rem; }
+    .hint { color: var(--muted); font-size: 0.9rem; }
     .invite-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem; }
-    .member-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #eee; padding: 0.75rem 0; gap: 1rem; flex-wrap: wrap; }
+    .member-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); padding: 0.75rem 0; gap: 1rem; flex-wrap: wrap; }
     .member-info { display: flex; flex-direction: column; gap: 0.125rem; }
-    .member-info span { color: #666; font-size: 0.9rem; }
+    .member-info span { color: var(--muted); font-size: 0.9rem; }
     .member-actions { display: flex; align-items: center; gap: 0.5rem; }
-    .status { font-size: 0.85rem; color: #1c7c31; font-weight: 600; }
-    .status-inactive { color: #a24b00; }
+    .status { font-size: 0.85rem; color: var(--secondary); font-weight: 600; }
+    .status-inactive { color: var(--accent); }
   `]
 })
 export class HouseholdSettingsComponent implements OnInit {
