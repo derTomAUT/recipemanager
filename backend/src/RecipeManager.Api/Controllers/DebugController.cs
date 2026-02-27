@@ -33,7 +33,7 @@ public class DebugController : ControllerBase
             return Unauthorized();
         }
 
-        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(h => h.UserId == userId);
+        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(h => h.UserId == userId && h.IsActive);
         if (membership == null)
         {
             return BadRequest("User does not belong to a household");

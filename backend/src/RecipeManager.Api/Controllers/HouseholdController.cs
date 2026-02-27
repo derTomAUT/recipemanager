@@ -70,7 +70,7 @@ public class HouseholdController : ControllerBase
             household.InviteCode,
             new List<MemberDto>
             {
-                new MemberDto(user.Id, user.Name, user.Email, member.Role)
+                new MemberDto(user.Id, user.Name, user.Email, member.Role, member.IsActive)
             }
         );
 
@@ -124,9 +124,9 @@ public class HouseholdController : ControllerBase
         await _db.SaveChangesAsync();
 
         var members = household.Members.Select(m =>
-            new MemberDto(m.User.Id, m.User.Name, m.User.Email, m.Role)
+            new MemberDto(m.User.Id, m.User.Name, m.User.Email, m.Role, m.IsActive)
         ).ToList();
-        members.Add(new MemberDto(user.Id, user.Name, user.Email, member.Role));
+        members.Add(new MemberDto(user.Id, user.Name, user.Email, member.Role, member.IsActive));
 
         var dto = new HouseholdDto(
             household.Id,
@@ -160,7 +160,7 @@ public class HouseholdController : ControllerBase
 
         var household = membership.Household;
         var members = household.Members.Select(m =>
-            new MemberDto(m.User.Id, m.User.Name, m.User.Email, m.Role)
+            new MemberDto(m.User.Id, m.User.Name, m.User.Email, m.Role, m.IsActive)
         ).ToList();
 
         var dto = new HouseholdDto(
@@ -253,7 +253,7 @@ public class HouseholdController : ControllerBase
 
         // Get current user's membership
         var currentMembership = await _db.HouseholdMembers
-            .FirstOrDefaultAsync(hm => hm.UserId == currentUserId.Value);
+            .FirstOrDefaultAsync(hm => hm.UserId == currentUserId.Value && hm.IsActive);
 
         if (currentMembership == null)
         {
@@ -287,6 +287,81 @@ public class HouseholdController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("members/{targetUserId:guid}/disable")]
+    public async Task<IActionResult> DisableMember(Guid targetUserId)
+    {
+        var currentUserId = GetUserId();
+        if (currentUserId == null)
+        {
+            return Unauthorized();
+        }
+
+        var currentMembership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == currentUserId.Value && hm.IsActive);
+
+        if (currentMembership == null)
+        {
+            return NotFound("Current user has no active household");
+        }
+
+        if (currentMembership.Role != "Owner")
+        {
+            return Forbid();
+        }
+
+        if (targetUserId == currentUserId.Value)
+        {
+            return BadRequest("Owner cannot disable themselves");
+        }
+
+        var targetMembership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == targetUserId && hm.HouseholdId == currentMembership.HouseholdId);
+
+        if (targetMembership == null)
+        {
+            return NotFound("Member not found in household");
+        }
+
+        targetMembership.IsActive = false;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("members/{targetUserId:guid}/enable")]
+    public async Task<IActionResult> EnableMember(Guid targetUserId)
+    {
+        var currentUserId = GetUserId();
+        if (currentUserId == null)
+        {
+            return Unauthorized();
+        }
+
+        var currentMembership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == currentUserId.Value && hm.IsActive);
+
+        if (currentMembership == null)
+        {
+            return NotFound("Current user has no active household");
+        }
+
+        if (currentMembership.Role != "Owner")
+        {
+            return Forbid();
+        }
+
+        var targetMembership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == targetUserId && hm.HouseholdId == currentMembership.HouseholdId);
+
+        if (targetMembership == null)
+        {
+            return NotFound("Member not found in household");
+        }
+
+        targetMembership.IsActive = true;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     private Guid? GetUserId()
     {
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -306,7 +381,7 @@ public class HouseholdController : ControllerBase
         }
 
         var membership = await _db.HouseholdMembers
-            .FirstOrDefaultAsync(hm => hm.UserId == userId.Value);
+            .FirstOrDefaultAsync(hm => hm.UserId == userId.Value && hm.IsActive);
 
         return membership == null ? null : (membership.HouseholdId, membership.Role);
     }

@@ -994,7 +994,7 @@ public class RecipeController : ControllerBase
     private async Task<(Guid householdId, string role)?> GetUserHouseholdAsync(Guid userId)
     {
         var member = await _db.HouseholdMembers
-            .FirstOrDefaultAsync(hm => hm.UserId == userId);
+            .FirstOrDefaultAsync(hm => hm.UserId == userId && hm.IsActive);
         return member == null ? null : (member.HouseholdId, member.Role);
     }
 

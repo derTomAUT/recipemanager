@@ -9,6 +9,21 @@ export interface HouseholdAiSettings {
   hasApiKey: boolean;
 }
 
+export interface HouseholdMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+}
+
+export interface HouseholdSummary {
+  id: string;
+  name: string;
+  inviteCode: string;
+  members: HouseholdMember[];
+}
+
 export interface UpdateHouseholdAiSettingsRequest {
   aiProvider?: string;
   aiModel?: string;
@@ -29,5 +44,17 @@ export class HouseholdSettingsService {
 
   getModels(provider: string): Observable<string[]> {
     return this.http.get<string[]>(`${environment.apiUrl}/ai/providers/models`, { params: { provider } });
+  }
+
+  getHousehold(): Observable<HouseholdSummary> {
+    return this.http.get<HouseholdSummary>(`${environment.apiUrl}/household/me`);
+  }
+
+  disableMember(userId: string): Observable<void> {
+    return this.http.post<void>(`${environment.apiUrl}/household/members/${userId}/disable`, {});
+  }
+
+  enableMember(userId: string): Observable<void> {
+    return this.http.post<void>(`${environment.apiUrl}/household/members/${userId}/enable`, {});
   }
 }

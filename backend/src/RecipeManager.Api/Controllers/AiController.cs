@@ -30,7 +30,7 @@ public class AiController : ControllerBase
             return Unauthorized();
         }
 
-        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(h => h.UserId == uid);
+        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(h => h.UserId == uid && h.IsActive);
         if (membership == null)
         {
             return BadRequest("User does not belong to a household");

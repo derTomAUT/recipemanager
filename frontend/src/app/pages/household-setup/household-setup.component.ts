@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { environment } from '../../../environments/environment';
@@ -45,9 +45,16 @@ export class HouseholdSetupComponent {
 
   constructor(
     private http: HttpClient,
+    private route: ActivatedRoute,
     private router: Router,
     private authService: AuthService
-  ) {}
+  ) {
+    const invite = this.route.snapshot.queryParamMap.get('invite');
+    if (invite) {
+      this.inviteCode = invite;
+      this.tab = 'join';
+    }
+  }
 
   create() {
     this.error = '';

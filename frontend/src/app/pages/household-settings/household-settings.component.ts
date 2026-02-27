@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { HouseholdSettingsService } from '../../services/household-settings.service';
+import { HouseholdMember, HouseholdSettingsService } from '../../services/household-settings.service';
+import { buildHouseholdInviteLink } from './household-settings.utils';
 
 @Component({
   selector: 'app-household-settings',
@@ -20,6 +21,37 @@ import { HouseholdSettingsService } from '../../services/household-settings.serv
       <div *ngIf="!loading && !isOwner" class="error">Only household owners can view this page.</div>
       <div *ngIf="error" class="error">{{ error }}</div>
       <div *ngIf="message" class="message">{{ message }}</div>
+
+      <section *ngIf="!loading && isOwner" class="card">
+        <h2>Invite</h2>
+        <p class="help">Share this invite link with a new household member.</p>
+        <div class="invite-row">
+          <input [value]="getInviteLink()" readonly />
+          <button class="btn-secondary" type="button" (click)="copyInviteLink()">Copy Link</button>
+        </div>
+      </section>
+
+      <section *ngIf="!loading && isOwner" class="card">
+        <h2>Members</h2>
+        <div *ngIf="members.length === 0" class="help">No members found.</div>
+        <div *ngFor="let member of members" class="member-row">
+          <div class="member-info">
+            <strong>{{ member.name }}</strong>
+            <span>{{ member.email }} · {{ member.role }}</span>
+          </div>
+          <div class="member-actions">
+            <span class="status" [class.status-inactive]="!member.isActive">
+              {{ member.isActive ? 'Active' : 'Disabled' }}
+            </span>
+            <button *ngIf="member.isActive" class="btn-secondary" type="button" (click)="disableMember(member.id)">
+              Disable
+            </button>
+            <button *ngIf="!member.isActive" class="btn-secondary" type="button" (click)="enableMember(member.id)">
+              Enable
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section *ngIf="!loading && isOwner" class="card">
         <h2>AI Import Settings</h2>
@@ -92,6 +124,13 @@ import { HouseholdSettingsService } from '../../services/household-settings.serv
 
     .actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .hint { color: #666; font-size: 0.9rem; }
+    .invite-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .member-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #eee; padding: 0.75rem 0; gap: 1rem; flex-wrap: wrap; }
+    .member-info { display: flex; flex-direction: column; gap: 0.125rem; }
+    .member-info span { color: #666; font-size: 0.9rem; }
+    .member-actions { display: flex; align-items: center; gap: 0.5rem; }
+    .status { font-size: 0.85rem; color: #1c7c31; font-weight: 600; }
+    .status-inactive { color: #a24b00; }
   `]
 })
 export class HouseholdSettingsComponent implements OnInit {
@@ -109,6 +148,8 @@ export class HouseholdSettingsComponent implements OnInit {
   apiKeyInput = '';
   hasApiKey = false;
   models: string[] = [];
+  householdInviteCode = '';
+  members: HouseholdMember[] = [];
 
   constructor(
     private authService: AuthService,
@@ -125,6 +166,7 @@ export class HouseholdSettingsComponent implements OnInit {
         this.router.navigate(['/home']);
         return;
       }
+      this.loadHousehold();
       this.loadSettings();
     });
   }
@@ -152,6 +194,18 @@ export class HouseholdSettingsComponent implements OnInit {
       error: () => {
         this.error = 'Failed to load household settings';
         this.loading = false;
+      }
+    });
+  }
+
+  loadHousehold() {
+    this.settingsService.getHousehold().subscribe({
+      next: (household) => {
+        this.householdInviteCode = household.inviteCode;
+        this.members = household.members;
+      },
+      error: () => {
+        this.error = 'Failed to load household members';
       }
     });
   }
@@ -247,6 +301,39 @@ export class HouseholdSettingsComponent implements OnInit {
         this.error = 'Failed to save settings';
         this.saving = false;
       }
+    });
+  }
+
+  getInviteLink(origin: string = window.location.origin): string {
+    return buildHouseholdInviteLink(this.householdInviteCode, origin);
+  }
+
+  copyInviteLink() {
+    const link = this.getInviteLink();
+    if (!link) return;
+
+    navigator.clipboard.writeText(link)
+      .then(() => this.message = 'Invite link copied.')
+      .catch(() => this.error = 'Failed to copy invite link.');
+  }
+
+  disableMember(userId: string) {
+    this.settingsService.disableMember(userId).subscribe({
+      next: () => {
+        this.message = 'Member disabled.';
+        this.loadHousehold();
+      },
+      error: () => this.error = 'Failed to disable member'
+    });
+  }
+
+  enableMember(userId: string) {
+    this.settingsService.enableMember(userId).subscribe({
+      next: () => {
+        this.message = 'Member enabled.';
+        this.loadHousehold();
+      },
+      error: () => this.error = 'Failed to enable member'
     });
   }
 }

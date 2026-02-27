@@ -69,7 +69,7 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync();
 
         // Get household membership (User doesn't have HouseholdMembers navigation, query separately)
-        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(hm => hm.UserId == user.Id);
+        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(hm => hm.UserId == user.Id && hm.IsActive);
 
         var token = _jwtGenerator.Generate(
             user.Id,
@@ -102,7 +102,7 @@ public class AuthController : ControllerBase
         if (user == null)
             return Unauthorized();
 
-        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(hm => hm.UserId == userId);
+        var membership = await _db.HouseholdMembers.FirstOrDefaultAsync(hm => hm.UserId == userId && hm.IsActive);
 
         var token = _jwtGenerator.Generate(
             user.Id,
