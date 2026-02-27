@@ -148,6 +148,11 @@ app.UseStaticFiles(new StaticFileOptions
     FileProvider = new PhysicalFileProvider(uploadsRoot),
     RequestPath = "/uploads"
 });
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsRoot),
+    RequestPath = "/api/uploads"
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

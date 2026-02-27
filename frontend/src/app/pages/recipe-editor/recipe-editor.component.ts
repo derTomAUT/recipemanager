@@ -439,10 +439,22 @@ export class RecipeEditorComponent implements OnInit {
   }
 
   private normalizeImageUrl(url: string): string {
-    const base = environment.apiUrl.replace(/\/api\/?$/, '');
-    if (url.startsWith(base)) {
-      const trimmed = url.substring(base.length);
+    const apiBase = environment.apiUrl.replace(/\/$/, '');
+    if (url.startsWith(`${apiBase}/uploads/`)) {
+      const trimmed = url.substring(apiBase.length);
+      return trimmed.startsWith('/api/uploads/')
+        ? trimmed.replace(/^\/api/, '')
+        : trimmed;
+    }
+
+    const originBase = apiBase.replace(/\/api\/?$/, '');
+    if (originBase && url.startsWith(`${originBase}/uploads/`)) {
+      const trimmed = url.substring(originBase.length);
       return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    }
+
+    if (url.startsWith('/api/uploads/')) {
+      return url.replace(/^\/api/, '');
     }
     return url;
   }
