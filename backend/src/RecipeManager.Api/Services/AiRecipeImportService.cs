@@ -257,7 +257,8 @@ public class AiRecipeImportService
             new List<ImportedImageDto>(),
             new List<CandidateImageDto>(),
             0.6,
-            new List<string> { "Imported with AI" }
+            new List<string> { "Imported with AI" },
+            null
         );
     }
 

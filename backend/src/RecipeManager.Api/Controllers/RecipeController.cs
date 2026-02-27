@@ -244,7 +244,8 @@ public class RecipeController : ControllerBase
             cookStats?.LastCooked,
             recipe.CreatedAt,
             recipe.UpdatedAt,
-            recipe.CreatedByUserId
+            recipe.CreatedByUserId,
+            recipe.SourceUrl
         );
 
         return Ok(dto);
@@ -257,6 +258,15 @@ public class RecipeController : ControllerBase
         if (userId == null)
         {
             return Unauthorized();
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SourceUrl))
+        {
+            if (!Uri.TryCreate(request.SourceUrl, UriKind.Absolute, out var sourceUri) ||
+                (sourceUri.Scheme != Uri.UriSchemeHttp && sourceUri.Scheme != Uri.UriSchemeHttps))
+            {
+                return BadRequest("Invalid source URL");
+            }
         }
 
         var membership = await GetUserHouseholdAsync(userId.Value);
@@ -273,6 +283,7 @@ public class RecipeController : ControllerBase
             HouseholdId = householdId,
             Title = request.Title,
             Description = request.Description,
+            SourceUrl = request.SourceUrl,
             Servings = request.Servings,
             PrepMinutes = request.PrepMinutes,
             CookMinutes = request.CookMinutes,
@@ -394,7 +405,8 @@ public class RecipeController : ControllerBase
             null, // LastCooked
             recipe.CreatedAt,
             recipe.UpdatedAt,
-            recipe.CreatedByUserId
+            recipe.CreatedByUserId,
+            recipe.SourceUrl
         );
 
         return CreatedAtAction(nameof(GetRecipe), new { id = recipe.Id }, dto);
@@ -577,7 +589,8 @@ public class RecipeController : ControllerBase
             cookStats?.LastCooked,
             recipe.CreatedAt,
             recipe.UpdatedAt,
-            recipe.CreatedByUserId
+            recipe.CreatedByUserId,
+            recipe.SourceUrl
         );
 
         return Ok(dto);

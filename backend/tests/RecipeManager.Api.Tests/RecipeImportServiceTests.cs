@@ -35,6 +35,33 @@ public class RecipeImportServiceTests
     }
 
     [Fact]
+    public async Task ExtractDraftFromHtml_IncludesSourceUrl()
+    {
+        var html = @"
+<html><head>
+<script type=""application/ld+json"">
+{""@context"":""https://schema.org"",""@type"":""Recipe"",""name"":""Test Cake""}
+</script>
+</head><body></body></html>";
+
+        var dataProtectionProvider = DataProtectionProvider.Create("RecipeManager.Tests");
+        var aiSettings = new HouseholdAiSettingsService(dataProtectionProvider);
+        var aiImport = new AiRecipeImportService(new TestHttpClientFactory(), aiSettings, NullLogger<AiRecipeImportService>.Instance);
+        var service = new RecipeImportService(
+            new TestHttpClientFactory(),
+            aiImport,
+            new ImageFetchService(new TestHttpClientFactory()),
+            new TestStorageService());
+
+        var household = new Household();
+        var url = "https://example.com/recipe";
+
+        var draft = await service.ExtractDraftFromHtmlAsync(html, url, household);
+
+        Assert.Equal(url, draft.SourceUrl);
+    }
+
+    [Fact]
     public void ExtractReadableText_StripsScriptAndReturnsContent()
     {
         var html = @"<html><head><style>.x{}</style><script>ignore()</script></head>

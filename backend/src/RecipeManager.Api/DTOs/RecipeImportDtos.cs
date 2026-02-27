@@ -26,5 +26,6 @@ public record RecipeDraftDto(
     List<ImportedImageDto> ImportedImages,
     List<CandidateImageDto> CandidateImages,
     double? ConfidenceScore,
-    List<string> Warnings
+    List<string> Warnings,
+    string? SourceUrl
 );

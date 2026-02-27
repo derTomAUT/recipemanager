@@ -12,7 +12,8 @@ public record CreateRecipeRequest(
     List<IngredientDto> Ingredients,
     List<StepDto> Steps,
     List<string> Tags,
-    List<ImportedImageDto>? ImportedImages = null
+    List<ImportedImageDto>? ImportedImages = null,
+    string? SourceUrl = null
 );
 
 public record UpdateRecipeRequest(
@@ -68,7 +69,8 @@ public record RecipeDetailDto(
     DateTime? LastCooked,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    Guid CreatedByUserId
+    Guid CreatedByUserId,
+    string? SourceUrl
 );
 
 public record RecipeIngredientDto(

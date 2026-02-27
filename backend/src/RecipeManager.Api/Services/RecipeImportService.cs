@@ -68,6 +68,8 @@ public class RecipeImportService
             };
         }
 
+        draft = draft with { SourceUrl = url };
+
         if (HasAiSettings(household))
         {
             var imageResult = await TryImportImagesAsync(url, html, draft, household);
@@ -153,7 +155,8 @@ public class RecipeImportService
                     new List<ImportedImageDto>(),
                     new List<CandidateImageDto>(),
                     null,
-                    new List<string>()
+                    new List<string>(),
+                    null
                 );
             }
             catch
@@ -323,7 +326,8 @@ public class RecipeImportService
             new List<ImportedImageDto>(),
             new List<CandidateImageDto>(),
             null,
-            new List<string>()
+            new List<string>(),
+            null
         );
     }
 
