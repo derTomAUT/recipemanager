@@ -1,10 +1,14 @@
 using System;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using RecipeManager.Api.Data;
 
 #nullable disable
 
 namespace RecipeManager.Api.Migrations
 {
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260227193000_AddAiDebugLogs")]
     public partial class AddAiDebugLogs : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
