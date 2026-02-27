@@ -11,7 +11,10 @@ import { RecipeDetail } from '../../models/recipe.model';
   template: `
     <div class="recipe-detail-page" *ngIf="recipe">
       <header class="sticky-header">
-        <h1>{{ recipe.title }}</h1>
+        <div class="header-title">
+          <h1>{{ recipe.title }}</h1>
+          <div *ngIf="recipe.sourceUrl" class="source-url">{{ recipe.sourceUrl }}</div>
+        </div>
         <div class="header-actions">
           <button (click)="markCooked()" [disabled]="marking" class="btn btn-primary">
             {{ marking ? 'Marking...' : 'Mark as Cooked' }}
@@ -79,6 +82,7 @@ import { RecipeDetail } from '../../models/recipe.model';
   styles: [`
     .recipe-detail-page { padding: 1rem; max-width: 800px; margin: 0 auto; }
     .sticky-header { position: sticky; top: 0; background: var(--bg); padding: 1rem 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0,0,0,0.1); z-index: 10; }
+    .header-title { display: flex; flex-direction: column; gap: 0.25rem; }
     .sticky-header h1 { margin: 0; font-size: 1.5rem; }
     .header-actions { display: flex; gap: 0.5rem; }
     .btn-danger { background: #d23f3f; color: white; }

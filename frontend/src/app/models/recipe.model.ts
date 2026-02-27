@@ -18,6 +18,7 @@ export interface RecipeDetail extends Recipe {
   images: RecipeImage[];
   updatedAt: string;
   createdByUserId: string;
+  sourceUrl?: string;
 }
 
 export interface RecipeIngredient {
@@ -53,6 +54,7 @@ export interface PagedResult<T> {
 export interface CreateRecipeRequest {
   title: string;
   description?: string;
+  sourceUrl?: string;
   servings?: number;
   prepMinutes?: number;
   cookMinutes?: number;
@@ -67,6 +69,7 @@ export interface UpdateRecipeRequest extends CreateRecipeRequest {}
 export interface RecipeDraft {
   title: string;
   description?: string;
+  sourceUrl?: string;
   servings?: number;
   prepMinutes?: number;
   cookMinutes?: number;

@@ -112,6 +112,12 @@ input, textarea, select {
   color: var(--text);
 }
 
+.source-url {
+  font-size: 0.85rem;
+  color: var(--muted);
+  word-break: break-word;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

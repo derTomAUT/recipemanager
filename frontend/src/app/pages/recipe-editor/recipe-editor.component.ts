@@ -191,6 +191,7 @@ export class RecipeEditorComponent implements OnInit {
   recipe: CreateRecipeRequest = {
     title: '',
     description: '',
+    sourceUrl: undefined,
     servings: undefined,
     prepMinutes: undefined,
     cookMinutes: undefined,
@@ -237,6 +238,7 @@ export class RecipeEditorComponent implements OnInit {
   applyDraft(draft: RecipeDraft) {
     this.recipe.title = draft.title || '';
     this.recipe.description = draft.description || '';
+    this.recipe.sourceUrl = draft.sourceUrl;
     this.recipe.servings = draft.servings;
     this.recipe.prepMinutes = draft.prepMinutes;
     this.recipe.cookMinutes = draft.cookMinutes;
@@ -264,6 +266,7 @@ export class RecipeEditorComponent implements OnInit {
         this.recipe = {
           title: data.title,
           description: data.description || '',
+          sourceUrl: data.sourceUrl,
           servings: data.servings,
           prepMinutes: data.prepMinutes,
           cookMinutes: data.cookMinutes,
