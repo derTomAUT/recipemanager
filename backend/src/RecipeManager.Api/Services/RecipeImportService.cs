@@ -125,14 +125,44 @@ public class RecipeImportService
             }
         }
 
+        var segments = new List<string>();
         var main = doc.DocumentNode.SelectSingleNode("//main") ?? doc.DocumentNode;
-        var text = HtmlEntity.DeEntitize(main.InnerText);
-        var cleaned = string.Join(' ',
-            text.Split('\n', '\r', '\t')
+        var mainText = NormalizeText(main.InnerText);
+        if (!string.IsNullOrWhiteSpace(mainText))
+        {
+            segments.Add(mainText);
+        }
+
+        var ingredientRows = doc.DocumentNode.SelectNodes(
+            "//*[contains(translate(@class,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ingredients-table')]//tr");
+        if (ingredientRows != null)
+        {
+            foreach (var row in ingredientRows)
+            {
+                var cells = row.SelectNodes("./th|./td|.//th|.//td");
+                if (cells == null || cells.Count == 0) continue;
+
+                var rowText = string.Join(" ",
+                    cells.Select(c => NormalizeText(c.InnerText))
+                        .Where(t => !string.IsNullOrWhiteSpace(t)));
+
+                if (!string.IsNullOrWhiteSpace(rowText))
+                {
+                    segments.Add(rowText);
+                }
+            }
+        }
+
+        return string.Join('\n', segments.Where(s => !string.IsNullOrWhiteSpace(s)));
+    }
+
+    private static string NormalizeText(string text)
+    {
+        var decoded = HtmlEntity.DeEntitize(text);
+        return string.Join(' ',
+            decoded.Split('\n', '\r', '\t')
                 .Select(t => t.Trim())
                 .Where(t => t.Length > 0));
-
-        return cleaned;
     }
 
     private RecipeDraftDto? TryParseJsonLd(string html)

@@ -91,6 +91,31 @@ public class RecipeImportServiceTests
     }
 
     [Fact]
+    public void ExtractReadableText_IncludesIngredientsTableOutsideMain()
+    {
+        var html = @"
+<html><body>
+<main><p>Intro text</p></main>
+<div class=""ingredients-table"">
+  <table>
+    <tr>
+      <td class=""text-right"" data-amount=""1000"">1000</td>
+      <th>g</th>
+      <th><a href=""/kartoffeln"">Kartoffeln</a></th>
+    </tr>
+  </table>
+</div>
+</body></html>";
+
+        var service = CreateService();
+        var text = service.ExtractReadableText(html);
+
+        Assert.Contains("Kartoffeln", text);
+        Assert.Contains("1000", text);
+        Assert.Contains("g", text);
+    }
+
+    [Fact]
     public async Task ImportFromUrlAsync_AddsBrowserHeaders()
     {
         var handler = new RecordingHandler();
