@@ -396,8 +396,7 @@ public class RecipeImportService
             {
                 foreach (var img in container.SelectNodes(".//img") ?? Enumerable.Empty<HtmlNode>())
                 {
-                    var src = img.GetAttributeValue("src", null);
-                    AddCandidate(src, candidates, seen, baseUri);
+                    AddImageCandidatesFromNode(img, candidates, seen, baseUri);
                 }
             }
         }
@@ -453,6 +452,46 @@ public class RecipeImportService
             {
                 candidates.Add(value);
             }
+        }
+    }
+
+    private static void AddImageCandidatesFromNode(HtmlNode img, List<string> candidates, HashSet<string> seen, Uri baseUri)
+    {
+        // Common lazy-loading attributes used by WP and similar CMS setups.
+        var directAttributes = new[]
+        {
+            "src",
+            "data-src",
+            "data-lazy-src",
+            "data-jpibfi-src",
+            "data-original"
+        };
+
+        foreach (var attribute in directAttributes)
+        {
+            AddCandidate(img.GetAttributeValue(attribute, null), candidates, seen, baseUri);
+        }
+
+        var srcSetAttributes = new[] { "srcset", "data-srcset", "data-lazy-srcset" };
+        foreach (var attribute in srcSetAttributes)
+        {
+            AddCandidatesFromSrcSet(img.GetAttributeValue(attribute, null), candidates, seen, baseUri);
+        }
+    }
+
+    private static void AddCandidatesFromSrcSet(string? srcSet, List<string> candidates, HashSet<string> seen, Uri baseUri)
+    {
+        if (string.IsNullOrWhiteSpace(srcSet)) return;
+
+        foreach (var part in srcSet.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var trimmed = part.Trim();
+            if (trimmed.Length == 0) continue;
+
+            // srcset item format: "<url> <descriptor>" (descriptor optional)
+            var firstSpace = trimmed.IndexOf(' ');
+            var url = firstSpace > 0 ? trimmed[..firstSpace] : trimmed;
+            AddCandidate(url, candidates, seen, baseUri);
         }
     }
 

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Http;
@@ -111,6 +112,55 @@ public class RecipeImportServiceTests
         Assert.True(handler.Request!.Headers.UserAgent.Count > 0);
         Assert.True(handler.Request.Headers.Accept.Count > 0);
         Assert.True(handler.Request.Headers.AcceptLanguage.Count > 0);
+    }
+
+    [Fact]
+    public void ExtractImageCandidates_UsesLazyLoadedAttributes()
+    {
+        var html = @"
+<html><body><main>
+  <img
+    src=""data:image/svg+xml,%3Csvg%3E%3C/svg%3E""
+    data-jpibfi-src=""https://example.com/images/ranch-main.jpg""
+    data-lazy-src=""https://example.com/images/ranch-main.jpg""
+    data-lazy-srcset=""https://example.com/images/ranch-main.jpg 731w, https://example.com/images/ranch-small.jpg 214w"" />
+</main></body></html>";
+
+        var service = CreateService();
+        var candidates = service.ExtractImageCandidates(html, new Uri("https://example.com/recipe"));
+
+        Assert.Contains("https://example.com/images/ranch-main.jpg", candidates);
+        Assert.Contains("https://example.com/images/ranch-small.jpg", candidates);
+        Assert.DoesNotContain(candidates, c => c.StartsWith("data:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExtractImageCandidates_ResolvesRelativeSrcSetUrls()
+    {
+        var html = @"
+<html><body><article>
+  <img src=""data:image/svg+xml,%3Csvg%3E%3C/svg%3E""
+       srcset=""/images/step1.jpg 600w, /images/step1-small.jpg 300w"" />
+</article></body></html>";
+
+        var service = CreateService();
+        var candidates = service.ExtractImageCandidates(html, new Uri("https://example.com/recipe"));
+
+        Assert.Contains("https://example.com/images/step1.jpg", candidates);
+        Assert.Contains("https://example.com/images/step1-small.jpg", candidates);
+    }
+
+    private static RecipeImportService CreateService()
+    {
+        var dataProtectionProvider = DataProtectionProvider.Create("RecipeManager.Tests");
+        var aiSettings = new HouseholdAiSettingsService(dataProtectionProvider);
+        var httpFactory = new TestHttpClientFactory();
+        var aiImport = new AiRecipeImportService(httpFactory, aiSettings, NullLogger<AiRecipeImportService>.Instance);
+        return new RecipeImportService(
+            httpFactory,
+            aiImport,
+            new ImageFetchService(httpFactory),
+            new TestStorageService());
     }
 
     private sealed class TestHttpClientFactory : IHttpClientFactory
