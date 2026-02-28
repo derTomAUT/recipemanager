@@ -63,7 +63,13 @@ public class PaperCardImportController : ControllerBase
             return BadRequest("User does not belong to an active household.");
         }
 
-        var vision = await _vision.ExtractAsync(frontImage, backImage, cancellationToken);
+        var household = await _db.Households.FindAsync([householdMembership.HouseholdId], cancellationToken);
+        if (household == null)
+        {
+            return NotFound("Household not found.");
+        }
+
+        var vision = await _vision.ExtractAsync(frontImage, backImage, household, userId.Value, cancellationToken);
         var draftId = Guid.NewGuid();
 
         var frontUrl = await UploadTempImageAsync(draftId, "front", frontImage, cancellationToken);

@@ -1,4 +1,7 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using RecipeManager.Api.Models;
 using RecipeManager.Api.DTOs;
 
 namespace RecipeManager.Api.Services;
@@ -16,16 +19,363 @@ public record PaperCardVisionResult(
 
 public interface IPaperCardVisionService
 {
-    Task<PaperCardVisionResult> ExtractAsync(IFormFile frontImage, IFormFile backImage, CancellationToken cancellationToken);
+    Task<PaperCardVisionResult> ExtractAsync(
+        IFormFile frontImage,
+        IFormFile backImage,
+        Household household,
+        Guid? userId,
+        CancellationToken cancellationToken);
 }
 
 public class PaperCardVisionService : IPaperCardVisionService
 {
-    public Task<PaperCardVisionResult> ExtractAsync(IFormFile frontImage, IFormFile backImage, CancellationToken cancellationToken)
-    {
-        var title = BuildTitleFromFileName(frontImage.FileName);
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly HouseholdAiSettingsService _settings;
+    private readonly AiDebugLogService? _debugLogService;
+    private readonly ILogger<PaperCardVisionService> _logger;
 
-        // Initial extractor fallback: keep user fully in control via edit/review before save.
+    public PaperCardVisionService(
+        IHttpClientFactory httpClientFactory,
+        HouseholdAiSettingsService settings,
+        AiDebugLogService? debugLogService,
+        ILogger<PaperCardVisionService> logger)
+    {
+        _httpClientFactory = httpClientFactory;
+        _settings = settings;
+        _debugLogService = debugLogService;
+        _logger = logger;
+    }
+
+    public PaperCardVisionService(
+        IHttpClientFactory httpClientFactory,
+        HouseholdAiSettingsService settings,
+        ILogger<PaperCardVisionService> logger)
+        : this(httpClientFactory, settings, null, logger)
+    {
+    }
+
+    public async Task<PaperCardVisionResult> ExtractAsync(
+        IFormFile frontImage,
+        IFormFile backImage,
+        Household household,
+        Guid? userId,
+        CancellationToken cancellationToken)
+    {
+        var fallbackTitle = BuildTitleFromFileName(frontImage.FileName);
+
+        if (string.IsNullOrWhiteSpace(household.AiProvider) ||
+            string.IsNullOrWhiteSpace(household.AiModel) ||
+            string.IsNullOrWhiteSpace(household.AiApiKeyEncrypted))
+        {
+            return BuildFallback(fallbackTitle, "Household AI is not configured. Configure AI settings to enable OCR parsing.");
+        }
+
+        try
+        {
+            var provider = household.AiProvider!;
+            var model = household.AiModel!;
+            var apiKey = _settings.Decrypt(household.AiApiKeyEncrypted!).Trim();
+            var client = _httpClientFactory.CreateClient();
+
+            var frontBytes = await ReadBytesAsync(frontImage, cancellationToken);
+            var backBytes = await ReadBytesAsync(backImage, cancellationToken);
+            var prompt = BuildPrompt();
+
+            string payloadJson;
+            string responseBody;
+            int statusCode;
+            string? contentText;
+
+            if (provider == "OpenAI")
+            {
+                client.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
+                var payload = BuildOpenAiPayload(model, prompt, frontImage.ContentType, frontBytes, backImage.ContentType, backBytes);
+                payloadJson = JsonSerializer.Serialize(payload);
+                var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", payload, cancellationToken);
+                statusCode = (int)response.StatusCode;
+                responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    await LogDebugAsync(household.Id, userId, provider, model, payloadJson, responseBody, statusCode, false, "OpenAI paper-card parse failed");
+                    return BuildFallback(fallbackTitle, $"AI parsing failed with status {statusCode}. You can still edit manually.");
+                }
+
+                using var doc = JsonDocument.Parse(responseBody);
+                contentText = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            }
+            else if (provider == "Anthropic")
+            {
+                client.DefaultRequestHeaders.Add("x-api-key", apiKey);
+                client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                var payload = BuildAnthropicPayload(model, prompt, frontImage.ContentType, frontBytes, backImage.ContentType, backBytes);
+                payloadJson = JsonSerializer.Serialize(payload);
+                var response = await client.PostAsJsonAsync("https://api.anthropic.com/v1/messages", payload, cancellationToken);
+                statusCode = (int)response.StatusCode;
+                responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    await LogDebugAsync(household.Id, userId, provider, model, payloadJson, responseBody, statusCode, false, "Anthropic paper-card parse failed");
+                    return BuildFallback(fallbackTitle, $"AI parsing failed with status {statusCode}. You can still edit manually.");
+                }
+
+                using var doc = JsonDocument.Parse(responseBody);
+                contentText = doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
+            }
+            else
+            {
+                return BuildFallback(fallbackTitle, $"Unsupported AI provider '{provider}'.");
+            }
+
+            await LogDebugAsync(household.Id, userId, household.AiProvider!, household.AiModel!, payloadJson, responseBody, statusCode, true, null);
+            var parsed = ParseResult(contentText, fallbackTitle);
+            return parsed;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Paper card AI parse failed");
+            return BuildFallback(fallbackTitle, "AI parsing failed unexpectedly. You can still complete the recipe manually.");
+        }
+    }
+
+    private static object BuildOpenAiPayload(string model, string prompt, string frontContentType, byte[] frontBytes, string backContentType, byte[] backBytes)
+    {
+        return new
+        {
+            model,
+            messages = new object[]
+            {
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "text", text = prompt },
+                        new { type = "image_url", image_url = new { url = $"data:{frontContentType};base64,{Convert.ToBase64String(frontBytes)}" } },
+                        new { type = "image_url", image_url = new { url = $"data:{backContentType};base64,{Convert.ToBase64String(backBytes)}" } }
+                    }
+                }
+            },
+            response_format = new { type = "json_object" }
+        };
+    }
+
+    private static object BuildAnthropicPayload(string model, string prompt, string frontContentType, byte[] frontBytes, string backContentType, byte[] backBytes)
+    {
+        return new
+        {
+            model,
+            max_tokens = 2500,
+            messages = new object[]
+            {
+                new
+                {
+                    role = "user",
+                    content = new object[]
+                    {
+                        new { type = "text", text = prompt },
+                        new
+                        {
+                            type = "image",
+                            source = new
+                            {
+                                type = "base64",
+                                media_type = frontContentType,
+                                data = Convert.ToBase64String(frontBytes)
+                            }
+                        },
+                        new
+                        {
+                            type = "image",
+                            source = new
+                            {
+                                type = "base64",
+                                media_type = backContentType,
+                                data = Convert.ToBase64String(backBytes)
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    private static async Task<byte[]> ReadBytesAsync(IFormFile file, CancellationToken cancellationToken)
+    {
+        await using var stream = file.OpenReadStream();
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms, cancellationToken);
+        return ms.ToArray();
+    }
+
+    private static string BuildPrompt()
+    {
+        return
+            "You are parsing a HelloFresh paper recipe card from two images: front and back.\n" +
+            "Extract structured recipe data and return JSON only with this exact schema:\n" +
+            "{\n" +
+            "  \"title\": string,\n" +
+            "  \"description\": string|null,\n" +
+            "  \"ingredientsByServings\": {\n" +
+            "    \"2\": [ { \"name\": string, \"quantity\": string|null, \"unit\": string|null, \"notes\": string|null } ],\n" +
+            "    \"3\": [ ... ],\n" +
+            "    \"4\": [ ... ]\n" +
+            "  },\n" +
+            "  \"steps\": [ { \"instruction\": string, \"timerSeconds\": number|null } ],\n" +
+            "  \"warnings\": [string],\n" +
+            "  \"confidenceScore\": number\n" +
+            "}\n" +
+            "Rules:\n" +
+            "- Keep ingredient names exactly as printed where possible.\n" +
+            "- If a serving section is missing, return an empty array for that serving key.\n" +
+            "- Do not include markdown fences.\n";
+    }
+
+    private static PaperCardVisionResult ParseResult(string? content, string fallbackTitle)
+    {
+        var sanitized = SanitizeJson(content);
+        using var doc = JsonDocument.Parse(sanitized);
+        var root = doc.RootElement;
+
+        var title = root.TryGetProperty("title", out var titleEl) && titleEl.ValueKind == JsonValueKind.String
+            ? titleEl.GetString() ?? fallbackTitle
+            : fallbackTitle;
+
+        var description = root.TryGetProperty("description", out var descEl) && descEl.ValueKind == JsonValueKind.String
+            ? descEl.GetString()
+            : null;
+
+        var ingredientsByServings = new Dictionary<int, List<IngredientDto>>
+        {
+            [2] = new(),
+            [3] = new(),
+            [4] = new()
+        };
+        if (root.TryGetProperty("ingredientsByServings", out var servingsEl) && servingsEl.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var serving in new[] { 2, 3, 4 })
+            {
+                if (servingsEl.TryGetProperty(serving.ToString(), out var ingredientArray) && ingredientArray.ValueKind == JsonValueKind.Array)
+                {
+                    ingredientsByServings[serving] = ingredientArray.EnumerateArray()
+                        .Select(item => new IngredientDto(
+                            item.TryGetProperty("name", out var name) ? name.GetString() ?? string.Empty : string.Empty,
+                            item.TryGetProperty("quantity", out var quantity) && quantity.ValueKind != JsonValueKind.Null ? quantity.GetString() : null,
+                            item.TryGetProperty("unit", out var unit) && unit.ValueKind != JsonValueKind.Null ? unit.GetString() : null,
+                            item.TryGetProperty("notes", out var notes) && notes.ValueKind != JsonValueKind.Null ? notes.GetString() : null
+                        ))
+                        .Where(i => !string.IsNullOrWhiteSpace(i.Name))
+                        .ToList();
+                }
+            }
+        }
+
+        var steps = new List<StepDto>();
+        if (root.TryGetProperty("steps", out var stepsEl) && stepsEl.ValueKind == JsonValueKind.Array)
+        {
+            steps = stepsEl.EnumerateArray()
+                .Select(item =>
+                {
+                    var instruction = item.TryGetProperty("instruction", out var ins) ? ins.GetString() ?? string.Empty : string.Empty;
+                    int? timer = null;
+                    if (item.TryGetProperty("timerSeconds", out var timerEl) && timerEl.ValueKind == JsonValueKind.Number && timerEl.TryGetInt32(out var timerValue))
+                    {
+                        timer = timerValue;
+                    }
+                    return new StepDto(instruction, timer);
+                })
+                .Where(s => !string.IsNullOrWhiteSpace(s.Instruction))
+                .ToList();
+        }
+
+        var warnings = new List<string>();
+        if (root.TryGetProperty("warnings", out var warningsEl) && warningsEl.ValueKind == JsonValueKind.Array)
+        {
+            warnings = warningsEl.EnumerateArray()
+                .Where(w => w.ValueKind == JsonValueKind.String)
+                .Select(w => w.GetString()!)
+                .Where(w => !string.IsNullOrWhiteSpace(w))
+                .ToList();
+        }
+
+        double? confidence = null;
+        if (root.TryGetProperty("confidenceScore", out var confidenceEl) && confidenceEl.ValueKind == JsonValueKind.Number && confidenceEl.TryGetDouble(out var score))
+        {
+            confidence = score;
+        }
+
+        return new PaperCardVisionResult(
+            title,
+            description,
+            ingredientsByServings,
+            steps,
+            null,
+            null,
+            confidence ?? 0.55,
+            warnings
+        );
+    }
+
+    private static string SanitizeJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return "{}";
+        }
+
+        var trimmed = json.Trim();
+        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+        {
+            return trimmed;
+        }
+
+        var startFenceEnd = trimmed.IndexOf('\n');
+        if (startFenceEnd < 0)
+        {
+            return trimmed;
+        }
+
+        var endFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+        if (endFence <= startFenceEnd)
+        {
+            return trimmed;
+        }
+
+        return trimmed.Substring(startFenceEnd + 1, endFence - startFenceEnd - 1).Trim();
+    }
+
+    private async Task LogDebugAsync(
+        Guid householdId,
+        Guid? userId,
+        string provider,
+        string model,
+        string? requestJson,
+        string? responseJson,
+        int? statusCode,
+        bool success,
+        string? error)
+    {
+        if (_debugLogService == null)
+        {
+            return;
+        }
+
+        await _debugLogService.LogAsync(
+            householdId,
+            userId,
+            provider,
+            model,
+            "PaperCardImport",
+            requestJson,
+            responseJson,
+            statusCode,
+            success,
+            error);
+    }
+
+    private static PaperCardVisionResult BuildFallback(string title, string warning)
+    {
         var ingredientsByServings = new Dictionary<int, List<IngredientDto>>
         {
             [2] = new List<IngredientDto>(),
@@ -40,10 +390,11 @@ public class PaperCardVisionService : IPaperCardVisionService
 
         var warnings = new List<string>
         {
+            warning,
             "Paper card OCR extraction is running in guided fallback mode. Please review title, ingredients, and steps."
         };
 
-        var result = new PaperCardVisionResult(
+        return new PaperCardVisionResult(
             title,
             null,
             ingredientsByServings,
@@ -54,7 +405,6 @@ public class PaperCardVisionService : IPaperCardVisionService
             warnings
         );
 
-        return Task.FromResult(result);
     }
 
     private static string BuildTitleFromFileName(string fileName)

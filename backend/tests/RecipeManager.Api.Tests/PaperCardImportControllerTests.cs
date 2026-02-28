@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
@@ -126,7 +127,7 @@ public class PaperCardImportControllerTests
         var controller = new PaperCardImportController(
             db,
             new TestStorageService(),
-            new PaperCardVisionService(),
+            new PaperCardVisionService(new HttpClientFactoryStub(), new HouseholdAiSettingsService(new TestDataProtectionProvider()), NullLogger<PaperCardVisionService>.Instance),
             NullLogger<PaperCardImportController>.Instance
         );
 
@@ -195,5 +196,23 @@ public class PaperCardImportControllerTests
             => Task.FromResult($"/uploads/{fileName}");
 
         public Task DeleteAsync(string url) => Task.CompletedTask;
+    }
+
+    private sealed class HttpClientFactoryStub : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
+    }
+
+    private sealed class TestDataProtectionProvider : Microsoft.AspNetCore.DataProtection.IDataProtectionProvider
+    {
+        public Microsoft.AspNetCore.DataProtection.IDataProtector CreateProtector(string purpose)
+            => new PassthroughProtector();
+    }
+
+    private sealed class PassthroughProtector : Microsoft.AspNetCore.DataProtection.IDataProtector
+    {
+        public Microsoft.AspNetCore.DataProtection.IDataProtector CreateProtector(string purpose) => this;
+        public byte[] Protect(byte[] plaintext) => plaintext;
+        public byte[] Unprotect(byte[] protectedData) => protectedData;
     }
 }
