@@ -29,4 +29,19 @@ describe('PaperCardImportService', () => {
 
     expect(post).toHaveBeenCalledWith('http://localhost:5000/api/import/paper-card/commit', request);
   });
+
+  it('posts draft image update as multipart form', () => {
+    const post = vi.fn().mockReturnValue(of({ importedImages: [] }));
+    const http = { post } as any;
+    const service = new PaperCardImportService(http);
+    const image = new File(['img'], 'edited.jpg', { type: 'image/jpeg' });
+
+    service.updateDraftImage('d1', 2, image).subscribe();
+
+    const [, body] = post.mock.calls[0];
+    expect(post).toHaveBeenCalledWith('http://localhost:5000/api/import/paper-card/draft-image', expect.any(FormData));
+    expect(body.get('draftId')).toBe('d1');
+    expect(body.get('imageIndex')).toBe('2');
+    expect(body.get('image')).toBe(image);
+  });
 });

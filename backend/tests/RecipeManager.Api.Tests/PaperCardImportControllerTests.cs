@@ -166,6 +166,43 @@ public class PaperCardImportControllerTests
         Assert.Equal(3, storage.UploadedFileNames.Count);
     }
 
+    [Fact]
+    public async Task UpdateDraftImage_UpdatesHeroAndReturnsImportedImages()
+    {
+        await using var db = CreateDb();
+        var user = CreateUser(db, "update-image@test.com");
+        var household = CreateHousehold(db);
+        CreateMember(db, household.Id, user.Id, "Owner");
+
+        var draft = new PaperCardImportDraft
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = household.Id,
+            CreatedByUserId = user.Id,
+            Title = "Paper Draft",
+            IngredientsByServingsJson = JsonSerializer.Serialize(new Dictionary<int, List<IngredientDto>> { [2] = [] }),
+            StepsJson = JsonSerializer.Serialize(new List<StepDto> { new("Step one", null) }),
+            HeroImageUrl = "/uploads/temp_old_hero.jpg",
+            StepImageUrlsJson = JsonSerializer.Serialize(new List<string> { "/uploads/temp_step.jpg" }),
+            WarningsJson = "[]",
+            CreatedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = DateTime.UtcNow.AddHours(2)
+        };
+        db.PaperCardImportDrafts.Add(draft);
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, user.Id);
+        var updateFile = CreateImageFormFile("updated.jpg");
+
+        var result = await controller.UpdateDraftImage(draft.Id, 0, updateFile, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var payload = Assert.IsType<PaperCardUpdateImagesResponseDto>(ok.Value);
+        Assert.Equal(2, payload.ImportedImages.Count);
+        Assert.True(payload.ImportedImages[0].IsTitleImage);
+        Assert.Contains("edited_0", payload.ImportedImages[0].Url);
+    }
+
     private static PaperCardImportController CreateController(
         AppDbContext db,
         Guid userId,

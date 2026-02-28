@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { RecipeService } from '../../services/recipe.service';
@@ -35,8 +35,19 @@ import { RecipeDetail } from '../../models/recipe.model';
             <span *ngIf="recipe.servings"><strong>Servings:</strong> {{ recipe.servings }}</span>
             <span *ngIf="recipe.cookCount"><strong>Cooked:</strong> {{ recipe.cookCount }}x</span>
           </div>
-          <div class="tags" *ngIf="recipe.tags.length">
-            <span *ngFor="let tag of recipe.tags" class="tag">{{ tag }}</span>
+          <div class="tags-row" *ngIf="recipe.tags.length || isMobileView">
+            <div class="tags" *ngIf="recipe.tags.length">
+              <span *ngFor="let tag of recipe.tags" class="tag">{{ tag }}</span>
+            </div>
+            <button
+              *ngIf="isMobileView"
+              type="button"
+              class="cook-mode-toggle"
+              [class.active]="cookModeEnabled"
+              [disabled]="!wakeLockSupported"
+              (click)="toggleCookMode()">
+              Cook Mode {{ cookModeEnabled ? 'On' : 'Off' }}
+            </button>
           </div>
         </section>
 
@@ -99,8 +110,12 @@ import { RecipeDetail } from '../../models/recipe.model';
     .recipe-meta { margin: 1rem 0; }
     .description { color: var(--muted); margin-bottom: 1rem; }
     .meta-row { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: var(--muted); }
-    .tags { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+    .tags-row { margin-top: 0.5rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+    .tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
     .tag { background: var(--surface-2); padding: 0.25rem 0.5rem; border-radius: 999px; font-size: 0.85rem; color: var(--muted); }
+    .cook-mode-toggle { display: none; border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); background: var(--surface-2); color: var(--text); border-radius: 999px; padding: 0.35rem 0.7rem; font-size: 0.82rem; white-space: nowrap; }
+    .cook-mode-toggle.active { background: color-mix(in srgb, var(--secondary) 25%, var(--surface)); border-color: color-mix(in srgb, var(--secondary) 40%, transparent); }
+    .cook-mode-toggle:disabled { opacity: 0.6; }
     .images { margin: 1rem 0; }
     .hero-image img { width: 100%; max-height: 380px; object-fit: cover; border-radius: 12px; }
     .ingredients, .steps { margin: 1.5rem 0; }
@@ -133,10 +148,11 @@ import { RecipeDetail } from '../../models/recipe.model';
     @media (max-width: 600px) {
       .sticky-header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
       .step-content p { font-size: 1rem; }
+      .cook-mode-toggle { display: inline-flex; align-items: center; }
     }
   `]
 })
-export class RecipeDetailComponent implements OnInit {
+export class RecipeDetailComponent implements OnInit, OnDestroy {
   recipe: RecipeDetail | null = null;
   loading = false;
   error = '';
@@ -144,6 +160,10 @@ export class RecipeDetailComponent implements OnInit {
   successMessage = '';
   heroImage: { url: string } | null = null;
   stepImages: { url: string }[] = [];
+  cookModeEnabled = true;
+  isMobileView = false;
+  wakeLockSupported = false;
+  private wakeLockSentinel: any = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -153,6 +173,12 @@ export class RecipeDetailComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.isMobileView = typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches;
+    this.wakeLockSupported = typeof navigator !== 'undefined' && !!(navigator as any).wakeLock?.request;
+    if (this.isMobileView && this.cookModeEnabled) {
+      void this.requestWakeLock();
+    }
+
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
       this.loadRecipe(id);
@@ -220,5 +246,49 @@ export class RecipeDetailComponent implements OnInit {
         this.error = 'Failed to mark as cooked';
       }
     });
+  }
+
+  async toggleCookMode() {
+    this.cookModeEnabled = !this.cookModeEnabled;
+    if (this.cookModeEnabled) {
+      await this.requestWakeLock();
+      return;
+    }
+    await this.releaseWakeLock();
+  }
+
+  @HostListener('document:visibilitychange')
+  onVisibilityChange() {
+    if (!this.isMobileView || !this.wakeLockSupported) return;
+    if (document.visibilityState === 'visible' && this.cookModeEnabled) {
+      void this.requestWakeLock();
+    }
+  }
+
+  private async requestWakeLock() {
+    if (!this.isMobileView || !this.wakeLockSupported || !this.cookModeEnabled || this.wakeLockSentinel) return;
+    try {
+      this.wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+      this.wakeLockSentinel?.addEventListener?.('release', () => {
+        this.wakeLockSentinel = null;
+        if (this.cookModeEnabled && document.visibilityState === 'visible') {
+          void this.requestWakeLock();
+        }
+      });
+    } catch {
+      this.cookModeEnabled = false;
+    }
+  }
+
+  private async releaseWakeLock() {
+    try {
+      await this.wakeLockSentinel?.release?.();
+    } finally {
+      this.wakeLockSentinel = null;
+    }
+  }
+
+  ngOnDestroy(): void {
+    void this.releaseWakeLock();
   }
 }

@@ -134,6 +134,10 @@ export interface PaperCardCommitResponse {
   recipeId: string;
 }
 
+export interface PaperCardUpdateImagesResponse {
+  importedImages: ImportedImageInput[];
+}
+
 export interface CookEvent {
   id: string;
   recipeId: string;

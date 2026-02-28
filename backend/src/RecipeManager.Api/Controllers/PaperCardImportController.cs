@@ -82,8 +82,7 @@ public class PaperCardImportController : ControllerBase
             vision.HeroImageRegion,
             vision.StepImageRegions,
             cancellationToken);
-        var importedImages = new List<ImportedImageDto> { new(heroUrl, true, 0) };
-        importedImages.AddRange(stepUrls.Select((url, index) => new ImportedImageDto(url, false, index + 1)));
+        var importedImages = BuildImportedImages(heroUrl, stepUrls);
 
         var draft = new PaperCardImportDraft
         {
@@ -251,6 +250,63 @@ public class PaperCardImportController : ControllerBase
         return Ok(new CommitPaperCardImportResponse(recipe.Id));
     }
 
+    [HttpPost("draft-image")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<ActionResult<PaperCardUpdateImagesResponseDto>> UpdateDraftImage(
+        [FromForm] Guid draftId,
+        [FromForm] int imageIndex,
+        [FromForm] IFormFile? image,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        if (image == null || !IsSupportedImage(image))
+        {
+            return BadRequest("A valid image file is required.");
+        }
+
+        var draft = await _db.PaperCardImportDrafts.FirstOrDefaultAsync(d => d.Id == draftId, cancellationToken);
+        if (draft == null)
+        {
+            return NotFound("Draft not found.");
+        }
+
+        var membership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(h => h.UserId == userId.Value && h.IsActive, cancellationToken);
+        if (membership == null || membership.HouseholdId != draft.HouseholdId)
+        {
+            return Forbid();
+        }
+
+        if (draft.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            return BadRequest("Draft expired. Please parse images again.");
+        }
+
+        var stepImageUrls = JsonSerializer.Deserialize<List<string>>(draft.StepImageUrlsJson, JsonOptions) ?? new List<string>();
+        var maxIndex = stepImageUrls.Count;
+        if (imageIndex < 0 || imageIndex > maxIndex)
+        {
+            return BadRequest("imageIndex is out of range.");
+        }
+
+        var updatedUrl = await UploadTempImageAsync(draft.Id, $"edited_{imageIndex}", image, cancellationToken);
+        if (imageIndex == 0)
+        {
+            draft.HeroImageUrl = updatedUrl;
+        }
+        else
+        {
+            stepImageUrls[imageIndex - 1] = updatedUrl;
+            draft.StepImageUrlsJson = JsonSerializer.Serialize(stepImageUrls, JsonOptions);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        var importedImages = BuildImportedImages(draft.HeroImageUrl, stepImageUrls);
+        return Ok(new PaperCardUpdateImagesResponseDto(importedImages));
+    }
+
     private async Task<string> UploadTempImageAsync(Guid draftId, string side, IFormFile file, CancellationToken cancellationToken)
     {
         var extension = Path.GetExtension(file.FileName);
@@ -405,6 +461,13 @@ public class PaperCardImportController : ControllerBase
     {
         if (file.Length <= 0) return false;
         return file.ContentType is "image/jpeg" or "image/png" or "image/webp";
+    }
+
+    private static List<ImportedImageDto> BuildImportedImages(string heroUrl, List<string> stepUrls)
+    {
+        var imported = new List<ImportedImageDto> { new(heroUrl, true, 0) };
+        imported.AddRange(stepUrls.Select((url, index) => new ImportedImageDto(url, false, index + 1)));
+        return imported;
     }
 
     private Guid? GetUserId()

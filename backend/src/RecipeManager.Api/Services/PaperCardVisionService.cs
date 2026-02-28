@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using RecipeManager.Api.Models;
 using RecipeManager.Api.DTOs;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Formats.Webp;
@@ -44,6 +45,9 @@ public interface IPaperCardVisionService
 
 public class PaperCardVisionService : IPaperCardVisionService
 {
+    private const int AnthropicMaxImageBytes = 4_500_000;
+    private const int AnthropicMaxDimension = 1800;
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly HouseholdAiSettingsService _settings;
     private readonly AiDebugLogService? _debugLogService;
@@ -92,8 +96,9 @@ public class PaperCardVisionService : IPaperCardVisionService
             var apiKey = _settings.Decrypt(household.AiApiKeyEncrypted!).Trim();
             var client = _httpClientFactory.CreateClient();
 
-            var (frontBytes, frontContentType) = await PrepareImageForAiAsync(frontImage, cancellationToken);
-            var (backBytes, backContentType) = await PrepareImageForAiAsync(backImage, cancellationToken);
+            var forAnthropic = provider == "Anthropic";
+            var (frontBytes, frontContentType) = await PrepareImageForAiAsync(frontImage, forAnthropic, cancellationToken);
+            var (backBytes, backContentType) = await PrepareImageForAiAsync(backImage, forAnthropic, cancellationToken);
             var prompt = BuildPrompt();
 
             string payloadJson;
@@ -220,11 +225,19 @@ public class PaperCardVisionService : IPaperCardVisionService
         };
     }
 
-    private static async Task<(byte[] Bytes, string ContentType)> PrepareImageForAiAsync(IFormFile file, CancellationToken cancellationToken)
+    private static async Task<(byte[] Bytes, string ContentType)> PrepareImageForAiAsync(
+        IFormFile file,
+        bool forAnthropic,
+        CancellationToken cancellationToken)
     {
         await using var stream = file.OpenReadStream();
         using var image = await Image.LoadAsync(stream, cancellationToken);
         image.Metadata.ExifProfile = null;
+
+        if (forAnthropic)
+        {
+            return await PrepareAnthropicImageAsync(image, cancellationToken);
+        }
 
         await using var ms = new MemoryStream();
         var contentType = file.ContentType.ToLowerInvariant();
@@ -240,6 +253,68 @@ public class PaperCardVisionService : IPaperCardVisionService
                 await image.SaveAsJpegAsync(ms, new JpegEncoder { Quality = 92 }, cancellationToken);
                 return (ms.ToArray(), "image/jpeg");
         }
+    }
+
+    private static async Task<(byte[] Bytes, string ContentType)> PrepareAnthropicImageAsync(
+        Image image,
+        CancellationToken cancellationToken)
+    {
+        using var working = image.CloneAs<SixLabors.ImageSharp.PixelFormats.Rgba32>();
+        DownscaleIfNeeded(working, AnthropicMaxDimension);
+
+        foreach (var quality in new[] { 90, 80, 70, 60, 50, 40 })
+        {
+            var data = await EncodeJpegAsync(working, quality, cancellationToken);
+            if (data.Length <= AnthropicMaxImageBytes)
+            {
+                return (data, "image/jpeg");
+            }
+        }
+
+        while (working.Width > 900 && working.Height > 900)
+        {
+            var nextWidth = (int)Math.Round(working.Width * 0.85);
+            var nextHeight = (int)Math.Round(working.Height * 0.85);
+            working.Mutate(ctx => ctx.Resize(new ResizeOptions
+            {
+                Size = new Size(nextWidth, nextHeight),
+                Mode = ResizeMode.Max
+            }));
+
+            var data = await EncodeJpegAsync(working, 40, cancellationToken);
+            if (data.Length <= AnthropicMaxImageBytes)
+            {
+                return (data, "image/jpeg");
+            }
+        }
+
+        var finalData = await EncodeJpegAsync(working, 35, cancellationToken);
+        return (finalData, "image/jpeg");
+    }
+
+    private static void DownscaleIfNeeded(Image image, int maxDimension)
+    {
+        if (image.Width <= maxDimension && image.Height <= maxDimension)
+        {
+            return;
+        }
+
+        image.Mutate(ctx => ctx.Resize(new ResizeOptions
+        {
+            Size = new Size(maxDimension, maxDimension),
+            Mode = ResizeMode.Max
+        }));
+    }
+
+    private static async Task<byte[]> EncodeJpegAsync(Image image, int quality, CancellationToken cancellationToken)
+    {
+        await using var ms = new MemoryStream();
+        await image.SaveAsJpegAsync(ms, new JpegEncoder
+        {
+            Quality = quality,
+            Interleaved = true
+        }, cancellationToken);
+        return ms.ToArray();
     }
 
     private static string BuildPrompt()

@@ -27,3 +27,7 @@ public record CommitPaperCardImportRequest(
 );
 
 public record CommitPaperCardImportResponse(Guid RecipeId);
+
+public record PaperCardUpdateImagesResponseDto(
+    List<ImportedImageDto> ImportedImages
+);
