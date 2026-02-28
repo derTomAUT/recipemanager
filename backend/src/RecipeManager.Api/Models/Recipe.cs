@@ -10,6 +10,11 @@ public class Recipe
     public int? Servings { get; set; }
     public int? PrepMinutes { get; set; }
     public int? CookMinutes { get; set; }
+    public string? NutritionPerServingJson { get; set; }
+    public string? NutritionTotalJson { get; set; }
+    public DateTime? NutritionEstimatedAtUtc { get; set; }
+    public string? NutritionSource { get; set; }
+    public string? NutritionNotes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public Guid CreatedByUserId { get; set; }

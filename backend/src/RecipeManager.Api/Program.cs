@@ -25,6 +25,7 @@ builder.Services.AddMemoryCache();
 // Application services
 builder.Services.AddScoped<RecommendationService>();
 builder.Services.AddScoped<MealAssistantService>();
+builder.Services.AddScoped<RecipeNutritionService>();
 builder.Services.AddScoped<RecipeImportService>();
 builder.Services.AddScoped<AiRecipeImportService>();
 builder.Services.AddScoped<AiDebugLogService>();

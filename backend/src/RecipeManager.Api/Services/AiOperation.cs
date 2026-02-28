@@ -6,7 +6,8 @@ public enum AiOperation
     ImageSelection = 2,
     ModelList = 3,
     PaperCardImport = 4,
-    MealAssistant = 5
+    MealAssistant = 5,
+    NutritionEstimate = 6
 }
 
 public static class AiOperationMapper
@@ -20,6 +21,7 @@ public static class AiOperationMapper
             AiOperation.ModelList => "ModelList",
             AiOperation.PaperCardImport => "PaperCardImport",
             AiOperation.MealAssistant => "MealAssistant",
+            AiOperation.NutritionEstimate => "NutritionEstimate",
             _ => operation.ToString()
         };
     }

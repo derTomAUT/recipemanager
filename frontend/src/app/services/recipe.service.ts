@@ -122,6 +122,11 @@ export class RecipeService {
     );
   }
 
+  estimateNutrition(recipeId: string): Observable<RecipeDetail> {
+    return this.http.post<RecipeDetail>(`${this.apiUrl}/${recipeId}/nutrition/estimate`, {})
+      .pipe(map(recipe => this.mapRecipeDetail(recipe)));
+  }
+
   private mapRecipe(recipe: Recipe): Recipe {
     return {
       ...recipe,

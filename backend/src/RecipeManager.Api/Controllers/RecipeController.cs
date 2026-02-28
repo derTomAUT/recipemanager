@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,7 @@ public class RecipeController : ControllerBase
     private readonly IStorageService _storageService;
     private readonly RecommendationService _recommendationService;
     private readonly MealAssistantService _mealAssistantService;
+    private readonly RecipeNutritionService _recipeNutritionService;
     private readonly ILogger<RecipeController> _logger;
 
     private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
@@ -29,12 +31,14 @@ public class RecipeController : ControllerBase
         IStorageService storageService,
         RecommendationService recommendationService,
         MealAssistantService mealAssistantService,
+        RecipeNutritionService recipeNutritionService,
         ILogger<RecipeController> logger)
     {
         _db = db;
         _storageService = storageService;
         _recommendationService = recommendationService;
         _mealAssistantService = mealAssistantService;
+        _recipeNutritionService = recipeNutritionService;
         _logger = logger;
     }
 
@@ -217,6 +221,70 @@ public class RecipeController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("{id:guid}/nutrition/estimate")]
+    public async Task<ActionResult<RecipeDetailDto>> EstimateNutrition(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null) return BadRequest("User does not belong to a household");
+
+        var (householdId, _) = membership.Value;
+        var household = await _db.Households.FindAsync([householdId], cancellationToken);
+        if (household == null) return NotFound("Household not found.");
+
+        var recipe = await _db.Recipes
+            .Where(r => r.Id == id && r.HouseholdId == householdId)
+            .Include(r => r.Ingredients.OrderBy(i => i.OrderIndex))
+            .Include(r => r.Steps.OrderBy(s => s.OrderIndex))
+            .Include(r => r.Images.OrderBy(i => i.OrderIndex))
+            .Include(r => r.Tags)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (recipe == null) return NotFound();
+
+        try
+        {
+            var estimate = await _recipeNutritionService.EstimateAsync(recipe, household, userId.Value, cancellationToken);
+            recipe.NutritionPerServingJson = JsonSerializer.Serialize(estimate.PerServing);
+            recipe.NutritionTotalJson = JsonSerializer.Serialize(estimate.Total);
+            recipe.NutritionEstimatedAtUtc = DateTime.UtcNow;
+            recipe.NutritionSource = "AI";
+            recipe.NutritionNotes = estimate.Notes;
+            recipe.UpdatedAt = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (AiKeyDecryptionException)
+        {
+            return BadRequest("Stored AI API key can no longer be decrypted. Please open Household Settings and save your API key again.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Failed to estimate nutrition for recipe {RecipeId}", id);
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected nutrition estimation failure for recipe {RecipeId}", id);
+            return StatusCode(502, "Failed to estimate nutrition from AI response.");
+        }
+
+        // Get cook stats
+        var cookStats = await _db.CookEvents
+            .Where(ce => ce.RecipeId == id)
+            .GroupBy(ce => ce.RecipeId)
+            .Select(g => new
+            {
+                CookCount = g.Count(),
+                LastCooked = g.Max(ce => ce.CookedAt)
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return Ok(ToRecipeDetailDto(recipe, cookStats?.CookCount ?? 0, cookStats?.LastCooked));
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<RecipeDetailDto>> GetRecipe(Guid id)
     {
@@ -258,30 +326,7 @@ public class RecipeController : ControllerBase
             })
             .FirstOrDefaultAsync();
 
-        var dto = new RecipeDetailDto(
-            recipe.Id,
-            recipe.Title,
-            recipe.Description,
-            recipe.Servings,
-            recipe.PrepMinutes,
-            recipe.CookMinutes,
-            recipe.Ingredients.Select(i => new RecipeIngredientDto(
-                i.Id, i.OrderIndex, i.Name, i.Quantity, i.Unit, i.Notes
-            )).ToList(),
-            recipe.Steps.Select(s => new RecipeStepDto(
-                s.Id, s.OrderIndex, s.Instruction, s.TimerSeconds
-            )).ToList(),
-            recipe.Images.Select(i => new RecipeImageDto(
-                i.Id, i.Url, i.IsTitleImage, i.OrderIndex
-            )).ToList(),
-            recipe.Tags.Select(t => t.Tag).ToList(),
-            cookStats?.CookCount ?? 0,
-            cookStats?.LastCooked,
-            recipe.CreatedAt,
-            recipe.UpdatedAt,
-            recipe.CreatedByUserId,
-            recipe.SourceUrl
-        );
+        var dto = ToRecipeDetailDto(recipe, cookStats?.CookCount ?? 0, cookStats?.LastCooked);
 
         return Ok(dto);
     }
@@ -421,28 +466,7 @@ public class RecipeController : ControllerBase
             }
         }
 
-        var dto = new RecipeDetailDto(
-            recipe.Id,
-            recipe.Title,
-            recipe.Description,
-            recipe.Servings,
-            recipe.PrepMinutes,
-            recipe.CookMinutes,
-            recipe.Ingredients.OrderBy(i => i.OrderIndex).Select(i => new RecipeIngredientDto(
-                i.Id, i.OrderIndex, i.Name, i.Quantity, i.Unit, i.Notes
-            )).ToList(),
-            recipe.Steps.OrderBy(s => s.OrderIndex).Select(s => new RecipeStepDto(
-                s.Id, s.OrderIndex, s.Instruction, s.TimerSeconds
-            )).ToList(),
-            new List<RecipeImageDto>(), // No images on creation
-            recipe.Tags.Select(t => t.Tag).ToList(),
-            0, // CookCount
-            null, // LastCooked
-            recipe.CreatedAt,
-            recipe.UpdatedAt,
-            recipe.CreatedByUserId,
-            recipe.SourceUrl
-        );
+        var dto = ToRecipeDetailDto(recipe, 0, null);
 
         return CreatedAtAction(nameof(GetRecipe), new { id = recipe.Id }, dto);
     }
@@ -622,30 +646,7 @@ public class RecipeController : ControllerBase
             })
             .FirstOrDefaultAsync();
 
-        var dto = new RecipeDetailDto(
-            recipe.Id,
-            recipe.Title,
-            recipe.Description,
-            recipe.Servings,
-            recipe.PrepMinutes,
-            recipe.CookMinutes,
-            recipe.Ingredients.OrderBy(i => i.OrderIndex).Select(i => new RecipeIngredientDto(
-                i.Id, i.OrderIndex, i.Name, i.Quantity, i.Unit, i.Notes
-            )).ToList(),
-            recipe.Steps.OrderBy(s => s.OrderIndex).Select(s => new RecipeStepDto(
-                s.Id, s.OrderIndex, s.Instruction, s.TimerSeconds
-            )).ToList(),
-            recipe.Images.OrderBy(i => i.OrderIndex).Select(i => new RecipeImageDto(
-                i.Id, i.Url, i.IsTitleImage, i.OrderIndex
-            )).ToList(),
-            recipe.Tags.Select(t => t.Tag).ToList(),
-            cookStats?.CookCount ?? 0,
-            cookStats?.LastCooked,
-            recipe.CreatedAt,
-            recipe.UpdatedAt,
-            recipe.CreatedByUserId,
-            recipe.SourceUrl
-        );
+        var dto = ToRecipeDetailDto(recipe, cookStats?.CookCount ?? 0, cookStats?.LastCooked);
 
         return Ok(dto);
     }
@@ -1043,6 +1044,67 @@ public class RecipeController : ControllerBase
         }).ToList();
 
         return Ok(new PagedResult<RecipeListItemDto>(items, totalCount, page, pageSize));
+    }
+
+    private static RecipeDetailDto ToRecipeDetailDto(Recipe recipe, int cookCount, DateTime? lastCooked)
+    {
+        return new RecipeDetailDto(
+            recipe.Id,
+            recipe.Title,
+            recipe.Description,
+            recipe.Servings,
+            recipe.PrepMinutes,
+            recipe.CookMinutes,
+            recipe.Ingredients.OrderBy(i => i.OrderIndex).Select(i => new RecipeIngredientDto(
+                i.Id, i.OrderIndex, i.Name, i.Quantity, i.Unit, i.Notes
+            )).ToList(),
+            recipe.Steps.OrderBy(s => s.OrderIndex).Select(s => new RecipeStepDto(
+                s.Id, s.OrderIndex, s.Instruction, s.TimerSeconds
+            )).ToList(),
+            recipe.Images.OrderBy(i => i.OrderIndex).Select(i => new RecipeImageDto(
+                i.Id, i.Url, i.IsTitleImage, i.OrderIndex
+            )).ToList(),
+            recipe.Tags.Select(t => t.Tag).ToList(),
+            cookCount,
+            lastCooked,
+            ReadNutrition(recipe),
+            recipe.CreatedAt,
+            recipe.UpdatedAt,
+            recipe.CreatedByUserId,
+            recipe.SourceUrl
+        );
+    }
+
+    private static NutritionEstimateDto? ReadNutrition(Recipe recipe)
+    {
+        if (string.IsNullOrWhiteSpace(recipe.NutritionPerServingJson) ||
+            string.IsNullOrWhiteSpace(recipe.NutritionTotalJson) ||
+            recipe.NutritionEstimatedAtUtc == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var perServing = JsonSerializer.Deserialize<NutritionMacroSnapshot>(recipe.NutritionPerServingJson);
+            var total = JsonSerializer.Deserialize<NutritionMacroSnapshot>(recipe.NutritionTotalJson);
+            if (perServing == null || total == null)
+            {
+                return null;
+            }
+
+            return new NutritionEstimateDto(
+                new NutritionMacroDto(perServing.Calories, perServing.Protein, perServing.Carbs, perServing.Fat, perServing.Fiber, perServing.Sugar, perServing.SodiumMg),
+                new NutritionMacroDto(total.Calories, total.Protein, total.Carbs, total.Fat, total.Fiber, total.Sugar, total.SodiumMg),
+                recipe.NutritionEstimatedAtUtc.Value,
+                recipe.NutritionSource ?? "AI",
+                recipe.NutritionNotes
+            );
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async Task<(Guid householdId, string role)?> GetUserHouseholdAsync(Guid userId)

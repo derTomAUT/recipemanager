@@ -20,6 +20,9 @@ import { RecipeDetail } from '../../models/recipe.model';
           <button (click)="markCooked()" [disabled]="marking" class="btn btn-primary">
             {{ marking ? 'Marking...' : 'Mark as Cooked' }}
           </button>
+          <button (click)="estimateNutrition()" [disabled]="estimatingNutrition" class="btn btn-secondary">
+            {{ estimatingNutrition ? 'Estimating...' : 'Estimate Nutrition' }}
+          </button>
           <a [routerLink]="['/recipes', recipe.id, 'edit']" class="btn btn-secondary">Edit</a>
           <button (click)="confirmDelete()" class="btn btn-danger">Delete</button>
         </div>
@@ -50,6 +53,30 @@ import { RecipeDetail } from '../../models/recipe.model';
               Cook Mode {{ cookModeEnabled ? 'On' : 'Off' }}
             </button>
           </div>
+        </section>
+
+        <section class="nutrition" *ngIf="recipe.nutrition as nutrition">
+          <h2>Nutrition Estimate</h2>
+          <div class="nutrition-grid">
+            <div class="nutrition-card">
+              <h3>Per Serving</h3>
+              <p><strong>Calories:</strong> {{ nutrition.perServing.calories | number:'1.0-0' }} kcal</p>
+              <p><strong>Protein:</strong> {{ nutrition.perServing.protein | number:'1.0-1' }} g</p>
+              <p><strong>Carbs:</strong> {{ nutrition.perServing.carbs | number:'1.0-1' }} g</p>
+              <p><strong>Fat:</strong> {{ nutrition.perServing.fat | number:'1.0-1' }} g</p>
+            </div>
+            <div class="nutrition-card">
+              <h3>Total Recipe</h3>
+              <p><strong>Calories:</strong> {{ nutrition.total.calories | number:'1.0-0' }} kcal</p>
+              <p><strong>Protein:</strong> {{ nutrition.total.protein | number:'1.0-1' }} g</p>
+              <p><strong>Carbs:</strong> {{ nutrition.total.carbs | number:'1.0-1' }} g</p>
+              <p><strong>Fat:</strong> {{ nutrition.total.fat | number:'1.0-1' }} g</p>
+            </div>
+          </div>
+          <p class="nutrition-meta">
+            Estimated {{ nutrition.estimatedAtUtc | date:'medium' }} via {{ nutrition.source }}.
+            <span *ngIf="nutrition.notes"> {{ nutrition.notes }}</span>
+          </p>
         </section>
 
         <section class="images" *ngIf="heroImage">
@@ -120,6 +147,11 @@ import { RecipeDetail } from '../../models/recipe.model';
     .images { margin: 1rem 0; }
     .hero-image img { width: 100%; max-height: 380px; object-fit: cover; border-radius: 12px; }
     .ingredients, .steps { margin: 1.5rem 0; }
+    .nutrition { margin: 1.25rem 0; padding: 1rem; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; background: color-mix(in srgb, var(--surface) 90%, var(--secondary) 10%); }
+    .nutrition-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .nutrition-card h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .nutrition-card p { margin: 0.2rem 0; }
+    .nutrition-meta { margin-top: 0.75rem; color: var(--muted); font-size: 0.88rem; }
     .ingredients h2, .steps h2 { font-size: 1.25rem; margin-bottom: 1rem; }
     .ingredient-list { list-style: none; padding: 0; }
     .ingredient-list li { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.08); display: flex; gap: 0.5rem; }
@@ -142,6 +174,7 @@ import { RecipeDetail } from '../../models/recipe.model';
     .not-found a { color: var(--primary); }
     @media (max-width: 900px) {
       .steps-layout { grid-template-columns: 1fr; }
+      .nutrition-grid { grid-template-columns: 1fr; }
       .step-rail { flex-direction: row; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 0.5rem; }
       .step-rail-item { scroll-snap-align: start; flex: 0 0 auto; }
       .step-rail-item img { width: 240px; height: 150px; }
@@ -158,6 +191,7 @@ export class RecipeDetailComponent implements OnInit, OnDestroy {
   loading = false;
   error = '';
   marking = false;
+  estimatingNutrition = false;
   successMessage = '';
   heroImage: { url: string } | null = null;
   stepImages: { url: string }[] = [];
@@ -245,6 +279,29 @@ export class RecipeDetailComponent implements OnInit, OnDestroy {
       error: () => {
         this.marking = false;
         this.error = 'Failed to mark as cooked';
+      }
+    });
+  }
+
+  estimateNutrition() {
+    if (!this.recipe) return;
+    this.estimatingNutrition = true;
+    this.error = '';
+    this.successMessage = '';
+    this.recipeService.estimateNutrition(this.recipe.id).subscribe({
+      next: (updated) => {
+        this.recipe = updated;
+        this.heroImage = this.recipe.images.find(img => img.isTitleImage)
+          ?? this.recipe.images.find(img => img.orderIndex === 0)
+          ?? null;
+        this.stepImages = this.recipe.images
+          .filter(img => !img.isTitleImage && img.orderIndex !== 0);
+        this.estimatingNutrition = false;
+        this.successMessage = 'Nutrition estimate updated.';
+      },
+      error: (err) => {
+        this.estimatingNutrition = false;
+        this.error = err?.error || 'Failed to estimate nutrition';
       }
     });
   }

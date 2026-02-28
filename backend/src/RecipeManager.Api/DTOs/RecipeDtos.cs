@@ -67,10 +67,29 @@ public record RecipeDetailDto(
     List<string> Tags,
     int CookCount,
     DateTime? LastCooked,
+    NutritionEstimateDto? Nutrition,
     DateTime CreatedAt,
     DateTime UpdatedAt,
     Guid CreatedByUserId,
     string? SourceUrl
+);
+
+public record NutritionEstimateDto(
+    NutritionMacroDto PerServing,
+    NutritionMacroDto Total,
+    DateTime EstimatedAtUtc,
+    string Source,
+    string? Notes
+);
+
+public record NutritionMacroDto(
+    decimal Calories,
+    decimal Protein,
+    decimal Carbs,
+    decimal Fat,
+    decimal? Fiber,
+    decimal? Sugar,
+    decimal? SodiumMg
 );
 
 public record RecipeIngredientDto(

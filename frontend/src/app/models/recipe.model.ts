@@ -16,9 +16,28 @@ export interface RecipeDetail extends Recipe {
   ingredients: RecipeIngredient[];
   steps: RecipeStep[];
   images: RecipeImage[];
+  nutrition?: NutritionEstimate;
   updatedAt: string;
   createdByUserId: string;
   sourceUrl?: string;
+}
+
+export interface NutritionEstimate {
+  perServing: NutritionMacro;
+  total: NutritionMacro;
+  estimatedAtUtc: string;
+  source: string;
+  notes?: string;
+}
+
+export interface NutritionMacro {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber?: number;
+  sugar?: number;
+  sodiumMg?: number;
 }
 
 export interface RecipeIngredient {
