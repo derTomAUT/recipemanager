@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import * as L from 'leaflet';
 import { AuthService } from '../../services/auth.service';
 import {
   HouseholdActivityItem,
@@ -111,6 +112,21 @@ import { buildHouseholdInviteLink, getApiErrorMessage } from './household-settin
       </section>
 
       <section *ngIf="!loading && isOwner" class="card">
+        <h2>Household Location</h2>
+        <p class="help">Pick your household location to determine seasonal meal suggestions correctly by hemisphere.</p>
+        <div class="map-shell">
+          <div #locationMap class="location-map" aria-label="Household location map"></div>
+        </div>
+        <div class="coord-row">
+          <span><strong>Latitude:</strong> {{ latitude ?? 'Not set' }}</span>
+          <span><strong>Longitude:</strong> {{ longitude ?? 'Not set' }}</span>
+          <button class="btn-secondary" type="button" (click)="clearCoordinates()" [disabled]="saving">
+            Clear
+          </button>
+        </div>
+      </section>
+
+      <section *ngIf="!loading && isOwner" class="card">
         <h2>AI Import Settings</h2>
         <p class="help">Configure an AI provider to power recipe import when JSON-LD is missing.</p>
 
@@ -194,9 +210,13 @@ import { buildHouseholdInviteLink, getApiErrorMessage } from './household-settin
     .activity-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); padding: 0.6rem 0; }
     .activity-event { font-weight: 600; }
     .activity-time { color: var(--muted); font-size: 0.85rem; text-align: right; }
+    .map-shell { border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); }
+    .location-map { width: 100%; height: 280px; }
+    .coord-row { margin-top: 0.65rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; color: var(--muted); }
   `]
 })
-export class HouseholdSettingsComponent implements OnInit {
+export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('locationMap') locationMap?: ElementRef<HTMLDivElement>;
   loading = true;
   saving = false;
   modelsLoading = false;
@@ -216,6 +236,12 @@ export class HouseholdSettingsComponent implements OnInit {
   members: HouseholdMember[] = [];
   activity: HouseholdActivityItem[] = [];
   roleDraftByUserId: Record<string, string | undefined> = {};
+  latitude: number | null = null;
+  longitude: number | null = null;
+  private map?: L.Map;
+  private marker?: L.CircleMarker;
+  private viewInitialized = false;
+
   constructor(
     private authService: AuthService,
     private settingsService: HouseholdSettingsService,
@@ -238,6 +264,15 @@ export class HouseholdSettingsComponent implements OnInit {
     });
   }
 
+  ngAfterViewInit() {
+    this.viewInitialized = true;
+    this.tryInitMap();
+  }
+
+  ngOnDestroy() {
+    this.map?.remove();
+  }
+
   get saveDisabled(): boolean {
     if (this.saving || !this.provider || !this.model) return true;
     if (!this.modelsLoaded) return true;
@@ -252,7 +287,11 @@ export class HouseholdSettingsComponent implements OnInit {
         this.provider = settings.aiProvider ?? '';
         this.model = settings.aiModel ?? '';
         this.hasApiKey = settings.hasApiKey;
+        this.latitude = settings.latitude ?? null;
+        this.longitude = settings.longitude ?? null;
         this.loading = false;
+        this.tryInitMap();
+        this.updateMapMarkerFromState();
 
         if (this.provider && this.hasApiKey) {
           this.loadModels();
@@ -379,13 +418,18 @@ export class HouseholdSettingsComponent implements OnInit {
     this.settingsService.updateSettings({
       aiProvider: this.provider,
       aiModel: this.model,
-      apiKey: this.apiKeyInput.trim() ? this.apiKeyInput.trim() : undefined
+      apiKey: this.apiKeyInput.trim() ? this.apiKeyInput.trim() : undefined,
+      latitude: this.latitude ?? undefined,
+      longitude: this.longitude ?? undefined
     }).subscribe({
       next: (settings) => {
         this.hasApiKey = settings.hasApiKey;
+        this.latitude = settings.latitude ?? null;
+        this.longitude = settings.longitude ?? null;
         this.apiKeyInput = '';
         this.message = 'Settings saved.';
         this.saving = false;
+        this.updateMapMarkerFromState();
       },
       error: (error) => {
         this.error = getApiErrorMessage(error, 'Failed to save settings');
@@ -501,6 +545,60 @@ export class HouseholdSettingsComponent implements OnInit {
         return 'Household created';
       default:
         return item.details || item.eventType;
+    }
+  }
+
+  clearCoordinates() {
+    this.latitude = null;
+    this.longitude = null;
+    this.marker?.remove();
+    this.marker = undefined;
+    if (this.map) {
+      this.map.setView([20, 0], 2);
+    }
+  }
+
+  private tryInitMap() {
+    if (!this.viewInitialized || this.map || !this.locationMap?.nativeElement) {
+      return;
+    }
+
+    const centerLat = this.latitude ?? 20;
+    const centerLng = this.longitude ?? 0;
+    const zoom = this.latitude != null && this.longitude != null ? 8 : 2;
+    this.map = L.map(this.locationMap.nativeElement, {
+      zoomControl: true
+    }).setView([centerLat, centerLng], zoom);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(this.map);
+
+    this.map.on('click', (event: L.LeafletMouseEvent) => {
+      this.latitude = Number(event.latlng.lat.toFixed(6));
+      this.longitude = Number(event.latlng.lng.toFixed(6));
+      this.updateMapMarkerFromState();
+    });
+
+    this.updateMapMarkerFromState();
+  }
+
+  private updateMapMarkerFromState() {
+    if (!this.map || this.latitude == null || this.longitude == null) {
+      return;
+    }
+
+    if (!this.marker) {
+      this.marker = L.circleMarker([this.latitude, this.longitude], {
+        radius: 7,
+        color: '#1d7f5f',
+        weight: 2,
+        fillColor: '#2db28f',
+        fillOpacity: 0.9
+      }).addTo(this.map);
+    } else {
+      this.marker.setLatLng([this.latitude, this.longitude]);
     }
   }
 }

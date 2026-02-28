@@ -2,12 +2,14 @@ using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RecipeManager.Api.Controllers;
 using RecipeManager.Api.Data;
 using RecipeManager.Api.DTOs;
 using RecipeManager.Api.Models;
+using RecipeManager.Api.Services;
 using Xunit;
 
 public class HouseholdControllerTests
@@ -151,6 +153,53 @@ public class HouseholdControllerTests
 
         var activeCount = await db.HouseholdInvites.CountAsync(i => i.HouseholdId == household.Id && i.IsActive);
         Assert.Equal(1, activeCount);
+    }
+
+    [Fact]
+    public async Task UpdateAiSettings_SavesCoordinates()
+    {
+        await using var db = CreateDb();
+        var owner = CreateUser(db, "owner8@test.com");
+        var household = CreateHousehold(db);
+        CreateMember(db, household.Id, owner.Id, "Owner");
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, owner.Id);
+        var aiSettings = new HouseholdAiSettingsService(DataProtectionProvider.Create("HouseholdControllerTests"));
+
+        var result = await controller.UpdateAiSettings(
+            new UpdateHouseholdAiSettingsRequest("OpenAI", "gpt-4o-mini", "key", 47.0707, 15.4395),
+            aiSettings);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<HouseholdAiSettingsDto>(ok.Value);
+        Assert.Equal(47.0707, dto.Latitude);
+        Assert.Equal(15.4395, dto.Longitude);
+
+        var saved = await db.Households.FindAsync(household.Id);
+        Assert.NotNull(saved);
+        Assert.Equal(47.0707, saved!.Latitude);
+        Assert.Equal(15.4395, saved.Longitude);
+    }
+
+    [Fact]
+    public async Task UpdateAiSettings_RejectsInvalidLatitude()
+    {
+        await using var db = CreateDb();
+        var owner = CreateUser(db, "owner9@test.com");
+        var household = CreateHousehold(db);
+        CreateMember(db, household.Id, owner.Id, "Owner");
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, owner.Id);
+        var aiSettings = new HouseholdAiSettingsService(DataProtectionProvider.Create("HouseholdControllerTestsInvalid"));
+
+        var result = await controller.UpdateAiSettings(
+            new UpdateHouseholdAiSettingsRequest("OpenAI", "gpt-4o-mini", "key", 123.0, 10.0),
+            aiSettings);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Latitude must be between -90 and 90.", badRequest.Value);
     }
 
     private static AppDbContext CreateDb()

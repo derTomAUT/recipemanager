@@ -18,6 +18,7 @@ public class RecipeController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IStorageService _storageService;
     private readonly RecommendationService _recommendationService;
+    private readonly MealAssistantService _mealAssistantService;
     private readonly ILogger<RecipeController> _logger;
 
     private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
@@ -27,11 +28,13 @@ public class RecipeController : ControllerBase
         AppDbContext db,
         IStorageService storageService,
         RecommendationService recommendationService,
+        MealAssistantService mealAssistantService,
         ILogger<RecipeController> logger)
     {
         _db = db;
         _storageService = storageService;
         _recommendationService = recommendationService;
+        _mealAssistantService = mealAssistantService;
         _logger = logger;
     }
 
@@ -178,6 +181,38 @@ public class RecipeController : ControllerBase
                 r.CreatedAt
             );
         }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpPost("meal-assistant")]
+    public async Task<ActionResult<MealAssistantResponseDto>> GetMealAssistantSuggestions(
+        [FromBody] MealAssistantRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var membership = await GetUserHouseholdAsync(userId.Value);
+        if (membership == null) return BadRequest("User does not belong to a household");
+
+        var (householdId, _) = membership.Value;
+        var household = await _db.Households.FindAsync([householdId], cancellationToken);
+        if (household == null)
+        {
+            return NotFound("Household not found.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Prompt))
+        {
+            return BadRequest("Prompt is required.");
+        }
+
+        var result = await _mealAssistantService.SuggestMealsAsync(
+            userId.Value,
+            household,
+            request.Prompt.Trim(),
+            cancellationToken);
 
         return Ok(result);
     }

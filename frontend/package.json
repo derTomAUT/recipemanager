@@ -33,6 +33,8 @@
     "@angular/platform-browser": "^21.1.0",
     "@angular/router": "^21.1.0",
     "@angular/service-worker": "^21.1.5",
+    "@types/leaflet": "^1.9.21",
+    "leaflet": "^1.9.4",
     "lucide-angular": "^0.575.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",

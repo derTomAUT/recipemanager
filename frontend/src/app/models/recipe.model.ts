@@ -148,3 +148,24 @@ export interface CookEvent {
   cookedAt: string;
   servings?: number;
 }
+
+export interface MealAssistantRequest {
+  prompt: string;
+}
+
+export interface MealAssistantSuggestion {
+  recipeId: string;
+  title: string;
+  reason: string;
+  warning?: string;
+  titleImageUrl?: string;
+}
+
+export interface MealAssistantResponse {
+  season: string;
+  hemisphere: string;
+  month: string;
+  usedAi: boolean;
+  warnings: string[];
+  suggestions: MealAssistantSuggestion[];
+}

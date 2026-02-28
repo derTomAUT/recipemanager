@@ -11,6 +11,8 @@ public class Household
     public string? AiProvider { get; set; }
     public string? AiModel { get; set; }
     public string? AiApiKeyEncrypted { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
     public ICollection<HouseholdMember> Members { get; set; } = new List<HouseholdMember>();
     public ICollection<HouseholdInvite> Invites { get; set; } = new List<HouseholdInvite>();
     public ICollection<HouseholdActivityLog> ActivityLogs { get; set; } = new List<HouseholdActivityLog>();

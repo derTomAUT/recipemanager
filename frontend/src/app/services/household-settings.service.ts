@@ -7,6 +7,8 @@ export interface HouseholdAiSettings {
   aiProvider?: string;
   aiModel?: string;
   hasApiKey: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface HouseholdMember {
@@ -44,6 +46,8 @@ export interface UpdateHouseholdAiSettingsRequest {
   aiProvider?: string;
   aiModel?: string;
   apiKey?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 @Injectable({ providedIn: 'root' })

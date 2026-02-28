@@ -4,7 +4,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter } from 'rxjs';
 import { SwUpdate, VersionEvent } from '@angular/service-worker';
 import { AuthService } from './services/auth.service';
-import { BookOpenText, Bug, House, LogOut, LucideAngularModule, Settings } from 'lucide-angular';
+import { BookOpenText, Bug, ChefHat, House, LogOut, LucideAngularModule, Settings } from 'lucide-angular';
 
 @Component({
   selector: 'app-root',
@@ -17,6 +17,7 @@ export class App {
   readonly homeIcon = House;
   readonly recipesIcon = BookOpenText;
   readonly householdIcon = Settings;
+  readonly mealAssistantIcon = ChefHat;
   readonly debugIcon = Bug;
   readonly logoutIcon = LogOut;
   updateAvailable = false;

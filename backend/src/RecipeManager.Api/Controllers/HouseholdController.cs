@@ -231,7 +231,9 @@ public class HouseholdController : ControllerBase
         return Ok(new HouseholdAiSettingsDto(
             household.AiProvider,
             household.AiModel,
-            !string.IsNullOrEmpty(household.AiApiKeyEncrypted)
+            !string.IsNullOrEmpty(household.AiApiKeyEncrypted),
+            household.Latitude,
+            household.Longitude
         ));
     }
 
@@ -260,6 +262,18 @@ public class HouseholdController : ControllerBase
 
         household.AiProvider = request.AiProvider;
         household.AiModel = request.AiModel;
+        if (request.Latitude is < -90 or > 90)
+        {
+            return BadRequest("Latitude must be between -90 and 90.");
+        }
+
+        if (request.Longitude is < -180 or > 180)
+        {
+            return BadRequest("Longitude must be between -180 and 180.");
+        }
+
+        household.Latitude = request.Latitude;
+        household.Longitude = request.Longitude;
 
         var apiKey = request.ApiKey?.Trim();
         if (!string.IsNullOrWhiteSpace(apiKey))
@@ -272,7 +286,9 @@ public class HouseholdController : ControllerBase
         return Ok(new HouseholdAiSettingsDto(
             household.AiProvider,
             household.AiModel,
-            !string.IsNullOrEmpty(household.AiApiKeyEncrypted)
+            !string.IsNullOrEmpty(household.AiApiKeyEncrypted),
+            household.Latitude,
+            household.Longitude
         ));
     }
 

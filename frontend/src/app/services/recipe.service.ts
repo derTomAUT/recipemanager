@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Recipe, RecipeDetail, RecipeImage, PagedResult, CreateRecipeRequest, UpdateRecipeRequest, CookEvent } from '../models/recipe.model';
+import { Recipe, RecipeDetail, RecipeImage, PagedResult, CreateRecipeRequest, UpdateRecipeRequest, CookEvent, MealAssistantResponse } from '../models/recipe.model';
 import { resolveImageUrl } from '../utils/url.utils';
 
 @Injectable({ providedIn: 'root' })
@@ -108,6 +108,18 @@ export class RecipeService {
         ...result,
         items: result.items.map(e => this.mapCookEvent(e))
       })));
+  }
+
+  getMealAssistantSuggestions(prompt: string): Observable<MealAssistantResponse> {
+    return this.http.post<MealAssistantResponse>(`${this.apiUrl}/meal-assistant`, { prompt }).pipe(
+      map(result => ({
+        ...result,
+        suggestions: result.suggestions.map(s => ({
+          ...s,
+          titleImageUrl: resolveImageUrl(s.titleImageUrl)
+        }))
+      }))
+    );
   }
 
   private mapRecipe(recipe: Recipe): Recipe {

@@ -104,3 +104,24 @@ public record PagedResult<T>(
 );
 
 public record SetTitleImageRequest(Guid ImageId);
+
+public record MealAssistantRequest(
+    [Required, StringLength(600, MinimumLength = 1)] string Prompt
+);
+
+public record MealAssistantSuggestionDto(
+    Guid RecipeId,
+    string Title,
+    string Reason,
+    string? Warning,
+    string? TitleImageUrl
+);
+
+public record MealAssistantResponseDto(
+    string Season,
+    string Hemisphere,
+    string Month,
+    bool UsedAi,
+    List<string> Warnings,
+    List<MealAssistantSuggestionDto> Suggestions
+);
