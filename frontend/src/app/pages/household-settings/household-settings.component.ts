@@ -247,6 +247,7 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
   private map?: L.Map;
   private marker?: L.CircleMarker;
   private viewInitialized = false;
+  private locationSaveTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private authService: AuthService,
@@ -276,6 +277,9 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
   }
 
   ngOnDestroy() {
+    if (this.locationSaveTimer) {
+      clearTimeout(this.locationSaveTimer);
+    }
     this.map?.remove();
   }
 
@@ -562,6 +566,7 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
     if (this.map) {
       this.map.setView([20, 0], 2);
     }
+    this.schedulePersistLocation();
   }
 
   private tryInitMap() {
@@ -585,6 +590,7 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
       this.latitude = Number(event.latlng.lat.toFixed(6));
       this.longitude = Number(event.latlng.lng.toFixed(6));
       this.updateMapMarkerFromState();
+      this.schedulePersistLocation();
     });
 
     this.updateMapMarkerFromState();
@@ -607,5 +613,28 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
     } else {
       this.marker.setLatLng([this.latitude, this.longitude]);
     }
+  }
+
+  private schedulePersistLocation() {
+    if (this.locationSaveTimer) {
+      clearTimeout(this.locationSaveTimer);
+    }
+
+    this.locationSaveTimer = setTimeout(() => this.persistLocation(), 250);
+  }
+
+  private persistLocation() {
+    this.settingsService.updateLocation({
+      latitude: this.latitude ?? undefined,
+      longitude: this.longitude ?? undefined
+    }).subscribe({
+      next: (settings) => {
+        this.latitude = settings.latitude ?? null;
+        this.longitude = settings.longitude ?? null;
+      },
+      error: (error) => {
+        this.error = getApiErrorMessage(error, 'Failed to save location');
+      }
+    });
   }
 }

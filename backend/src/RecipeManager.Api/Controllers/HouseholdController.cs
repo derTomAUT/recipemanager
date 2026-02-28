@@ -292,6 +292,51 @@ public class HouseholdController : ControllerBase
         ));
     }
 
+    [HttpPut("settings/location")]
+    public async Task<ActionResult<HouseholdAiSettingsDto>> UpdateLocation(
+        [FromBody] UpdateHouseholdLocationRequest request)
+    {
+        var membership = await GetMembershipAsync();
+        if (membership == null)
+        {
+            return Unauthorized();
+        }
+
+        var (householdId, role) = membership.Value;
+        if (role != "Owner")
+        {
+            return Forbid();
+        }
+
+        var household = await _db.Households.FindAsync(householdId);
+        if (household == null)
+        {
+            return NotFound();
+        }
+
+        if (request.Latitude is < -90 or > 90)
+        {
+            return BadRequest("Latitude must be between -90 and 90.");
+        }
+
+        if (request.Longitude is < -180 or > 180)
+        {
+            return BadRequest("Longitude must be between -180 and 180.");
+        }
+
+        household.Latitude = request.Latitude;
+        household.Longitude = request.Longitude;
+        await _db.SaveChangesAsync();
+
+        return Ok(new HouseholdAiSettingsDto(
+            household.AiProvider,
+            household.AiModel,
+            !string.IsNullOrEmpty(household.AiApiKeyEncrypted),
+            household.Latitude,
+            household.Longitude
+        ));
+    }
+
     [HttpDelete("members/{targetUserId:guid}")]
     public async Task<IActionResult> RemoveMember(Guid targetUserId)
     {

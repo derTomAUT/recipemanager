@@ -15,3 +15,8 @@ public record UpdateHouseholdAiSettingsRequest(
     double? Latitude,
     double? Longitude
 );
+
+public record UpdateHouseholdLocationRequest(
+    double? Latitude,
+    double? Longitude
+);

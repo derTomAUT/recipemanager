@@ -50,6 +50,11 @@ export interface UpdateHouseholdAiSettingsRequest {
   longitude?: number;
 }
 
+export interface UpdateHouseholdLocationRequest {
+  latitude?: number;
+  longitude?: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class HouseholdSettingsService {
   constructor(private http: HttpClient) {}
@@ -60,6 +65,10 @@ export class HouseholdSettingsService {
 
   updateSettings(request: UpdateHouseholdAiSettingsRequest): Observable<HouseholdAiSettings> {
     return this.http.put<HouseholdAiSettings>(`${environment.apiUrl}/household/settings`, request);
+  }
+
+  updateLocation(request: UpdateHouseholdLocationRequest): Observable<HouseholdAiSettings> {
+    return this.http.put<HouseholdAiSettings>(`${environment.apiUrl}/household/settings/location`, request);
   }
 
   getModels(provider: string): Observable<string[]> {

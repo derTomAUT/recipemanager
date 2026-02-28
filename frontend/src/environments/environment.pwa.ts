@@ -1,9 +1,7 @@
+import { resolveApiUrl } from './api-url';
+
 export function resolvePwaApiUrl(loc: { hostname?: string } = globalThis.location ?? {}): string {
-  const hostname = loc.hostname ?? '';
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:5000/api';
-  }
-  return '/api';
+  return resolveApiUrl(loc);
 }
 
 export const environment = {

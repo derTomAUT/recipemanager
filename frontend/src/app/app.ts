@@ -68,11 +68,7 @@ export class App {
   async refreshToLatest() {
     if (!this.swUpdate.isEnabled || this.activatingUpdate) return;
     this.activatingUpdate = true;
-    try {
-      await this.swUpdate.activateUpdate();
-      location.reload();
-    } catch {
-      this.activatingUpdate = false;
-    }
+    const separator = location.href.includes('?') ? '&' : '?';
+    location.assign(`${location.href}${separator}v=${Date.now()}`);
   }
 }
