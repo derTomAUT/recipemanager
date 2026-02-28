@@ -216,7 +216,13 @@ import { buildHouseholdInviteLink, getApiErrorMessage } from './household-settin
   `]
 })
 export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('locationMap') locationMap?: ElementRef<HTMLDivElement>;
+  @ViewChild('locationMap')
+  set locationMapRef(value: ElementRef<HTMLDivElement> | undefined) {
+    this.locationMap = value;
+    this.tryInitMap();
+  }
+
+  private locationMap?: ElementRef<HTMLDivElement>;
   loading = true;
   saving = false;
   modelsLoading = false;
@@ -582,6 +588,7 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
     });
 
     this.updateMapMarkerFromState();
+    setTimeout(() => this.map?.invalidateSize(), 0);
   }
 
   private updateMapMarkerFromState() {
