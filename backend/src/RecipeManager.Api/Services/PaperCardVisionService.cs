@@ -3,6 +3,11 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using RecipeManager.Api.Models;
 using RecipeManager.Api.DTOs;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
+using SixLabors.ImageSharp.Processing;
 
 namespace RecipeManager.Api.Services;
 
@@ -87,8 +92,8 @@ public class PaperCardVisionService : IPaperCardVisionService
             var apiKey = _settings.Decrypt(household.AiApiKeyEncrypted!).Trim();
             var client = _httpClientFactory.CreateClient();
 
-            var frontBytes = await ReadBytesAsync(frontImage, cancellationToken);
-            var backBytes = await ReadBytesAsync(backImage, cancellationToken);
+            var (frontBytes, frontContentType) = await PrepareImageForAiAsync(frontImage, cancellationToken);
+            var (backBytes, backContentType) = await PrepareImageForAiAsync(backImage, cancellationToken);
             var prompt = BuildPrompt();
 
             string payloadJson;
@@ -99,7 +104,7 @@ public class PaperCardVisionService : IPaperCardVisionService
             if (provider == "OpenAI")
             {
                 client.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
-                var payload = BuildOpenAiPayload(model, prompt, frontImage.ContentType, frontBytes, backImage.ContentType, backBytes);
+                var payload = BuildOpenAiPayload(model, prompt, frontContentType, frontBytes, backContentType, backBytes);
                 payloadJson = JsonSerializer.Serialize(payload);
                 var response = await client.PostAsJsonAsync("https://api.openai.com/v1/chat/completions", payload, cancellationToken);
                 statusCode = (int)response.StatusCode;
@@ -118,7 +123,7 @@ public class PaperCardVisionService : IPaperCardVisionService
             {
                 client.DefaultRequestHeaders.Add("x-api-key", apiKey);
                 client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-                var payload = BuildAnthropicPayload(model, prompt, frontImage.ContentType, frontBytes, backImage.ContentType, backBytes);
+                var payload = BuildAnthropicPayload(model, prompt, frontContentType, frontBytes, backContentType, backBytes);
                 payloadJson = JsonSerializer.Serialize(payload);
                 var response = await client.PostAsJsonAsync("https://api.anthropic.com/v1/messages", payload, cancellationToken);
                 statusCode = (int)response.StatusCode;
@@ -215,12 +220,26 @@ public class PaperCardVisionService : IPaperCardVisionService
         };
     }
 
-    private static async Task<byte[]> ReadBytesAsync(IFormFile file, CancellationToken cancellationToken)
+    private static async Task<(byte[] Bytes, string ContentType)> PrepareImageForAiAsync(IFormFile file, CancellationToken cancellationToken)
     {
         await using var stream = file.OpenReadStream();
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms, cancellationToken);
-        return ms.ToArray();
+        using var image = await Image.LoadAsync(stream, cancellationToken);
+        image.Metadata.ExifProfile = null;
+
+        await using var ms = new MemoryStream();
+        var contentType = file.ContentType.ToLowerInvariant();
+        switch (contentType)
+        {
+            case "image/png":
+                await image.SaveAsPngAsync(ms, new PngEncoder(), cancellationToken);
+                return (ms.ToArray(), "image/png");
+            case "image/webp":
+                await image.SaveAsWebpAsync(ms, new WebpEncoder(), cancellationToken);
+                return (ms.ToArray(), "image/webp");
+            default:
+                await image.SaveAsJpegAsync(ms, new JpegEncoder { Quality = 92 }, cancellationToken);
+                return (ms.ToArray(), "image/jpeg");
+        }
     }
 
     private static string BuildPrompt()
@@ -249,6 +268,7 @@ public class PaperCardVisionService : IPaperCardVisionService
             "- Extract ingredients from the back-side ingredient table for 2/3/4 servings.\n" +
             "- heroImageRegion uses normalized coordinates in range [0,1] relative to front image.\n" +
             "- stepImageRegions uses normalized coordinates in range [0,1] relative to back image.\n" +
+            "- Use rotationDegrees so cropped images are upright. For heroImageRegion, rotate so dish/title reads with top at top.\n" +
             "- Include every individual step photo on the back side in cooking order.\n" +
             "- Do not include markdown fences.\n";
     }

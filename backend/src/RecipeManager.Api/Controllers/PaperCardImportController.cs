@@ -279,8 +279,8 @@ public class PaperCardImportController : ControllerBase
     {
         try
         {
-            using var front = await LoadAutoOrientedImageAsync(frontImage, cancellationToken);
-            using var back = await LoadAutoOrientedImageAsync(backImage, cancellationToken);
+            using var front = await LoadImageAsync(frontImage, cancellationToken);
+            using var back = await LoadImageAsync(backImage, cancellationToken);
 
             var heroUrl = heroRegion != null
                 ? await UploadCroppedImageAsync(draftId, front, heroRegion, "hero", 0, cancellationToken)
@@ -319,12 +319,10 @@ public class PaperCardImportController : ControllerBase
         }
     }
 
-    private static async Task<Image> LoadAutoOrientedImageAsync(IFormFile file, CancellationToken cancellationToken)
+    private static async Task<Image> LoadImageAsync(IFormFile file, CancellationToken cancellationToken)
     {
         await using var stream = file.OpenReadStream();
-        var image = await Image.LoadAsync(stream, cancellationToken);
-        image.Mutate(ctx => ctx.AutoOrient());
-        return image;
+        return await Image.LoadAsync(stream, cancellationToken);
     }
 
     private async Task<string> UploadCroppedImageAsync(
