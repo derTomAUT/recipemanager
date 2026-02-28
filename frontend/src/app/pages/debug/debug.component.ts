@@ -43,7 +43,8 @@ export class DebugComponent implements OnInit, OnDestroy {
   paused = false;
   autoScroll = true;
   logsError = '';
-  private eventSource?: EventSource;
+  private streamController?: AbortController;
+  private streamTask?: Promise<void>;
   private buffered: string[] = [];
 
   constructor(
@@ -196,39 +197,122 @@ export class DebugComponent implements OnInit, OnDestroy {
   }
 
   private connectLogStream(): void {
-    if (this.eventSource) return;
+    if (this.streamTask) return;
 
     const token = this.authService.getToken();
-    const url = `${environment.apiUrl}/logs/stream?access_token=${encodeURIComponent(token ?? '')}`;
+    if (!token) {
+      this.connected = false;
+      this.logsError = 'Not authenticated.';
+      return;
+    }
 
-    this.eventSource = new EventSource(url);
-    this.eventSource.onopen = () => {
+    const url = `${environment.apiUrl}/logs/stream`;
+    this.streamController = new AbortController();
+    this.streamTask = this.streamLogs(url, token, this.streamController.signal).finally(() => {
+      this.streamTask = undefined;
+    });
+  }
+
+  private closeLogStream(): void {
+    this.streamController?.abort();
+    this.streamController = undefined;
+    this.connected = false;
+  }
+
+  private async streamLogs(url: string, token: string, signal: AbortSignal): Promise<void> {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Accept: 'text/event-stream',
+          Authorization: `Bearer ${token}`
+        },
+        cache: 'no-store',
+        signal
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Log stream request failed (${response.status}).`);
+      }
+
       this.zone.run(() => {
         this.connected = true;
         this.logsError = '';
       });
-    };
-    this.eventSource.onerror = () => {
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (!signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        buffer = this.consumeSseBuffer(buffer);
+      }
+
+      if (!signal.aborted) {
+        this.zone.run(() => {
+          this.connected = false;
+          this.logsError = 'Log stream disconnected.';
+        });
+      }
+    } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Log stream disconnected.';
       this.zone.run(() => {
         this.connected = false;
-        this.logsError = 'Log stream disconnected. Retrying...';
+        this.logsError = message;
       });
-    };
-    this.eventSource.onmessage = (event) => {
-      this.zone.run(() => {
-        if (this.paused) {
-          this.buffered.push(event.data);
-          return;
-        }
-        this.appendLine(event.data);
-      });
-    };
+    }
   }
 
-  private closeLogStream(): void {
-    this.eventSource?.close();
-    this.eventSource = undefined;
-    this.connected = false;
+  private consumeSseBuffer(buffer: string): string {
+    const normalized = buffer.replace(/\r\n/g, '\n');
+    let remaining = normalized;
+    let boundary = remaining.indexOf('\n\n');
+
+    while (boundary >= 0) {
+      const rawEvent = remaining.slice(0, boundary);
+      this.handleSseEvent(rawEvent);
+      remaining = remaining.slice(boundary + 2);
+      boundary = remaining.indexOf('\n\n');
+    }
+
+    return remaining;
+  }
+
+  private handleSseEvent(rawEvent: string): void {
+    if (!rawEvent.trim()) return;
+
+    let eventName = 'message';
+    const dataLines: string[] = [];
+    for (const line of rawEvent.split('\n')) {
+      if (line.startsWith('event:')) {
+        eventName = line.slice('event:'.length).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice('data:'.length).trimStart());
+      }
+    }
+
+    const data = dataLines.join('\n');
+    this.zone.run(() => {
+      if (eventName === 'error') {
+        this.logsError = data || 'Log stream error.';
+        return;
+      }
+
+      if (this.paused) {
+        this.buffered.push(data);
+        return;
+      }
+
+      this.appendLine(data);
+    });
   }
 
   togglePause(): void {

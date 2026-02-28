@@ -64,48 +64,30 @@ export class LogsComponent implements OnInit, OnDestroy {
   autoScroll = true;
   error = '';
 
-  private eventSource?: EventSource;
+  private streamController?: AbortController;
+  private streamTask?: Promise<void>;
   private buffered: string[] = [];
 
   constructor(private authService: AuthService, private zone: NgZone) {}
 
   ngOnInit() {
     const token = this.authService.getToken();
-    const url = `${environment.apiUrl}/logs/stream?access_token=${encodeURIComponent(token ?? '')}`;
+    if (!token) {
+      this.error = 'Not authenticated.';
+      this.connected = false;
+      return;
+    }
 
-    this.eventSource = new EventSource(url);
-    this.eventSource.onopen = () => {
-      this.zone.run(() => {
-        this.connected = true;
-        this.error = '';
-      });
-    };
-    this.eventSource.onerror = () => {
-      this.zone.run(() => {
-        this.connected = false;
-        this.error = 'Log stream disconnected. Retrying...';
-      });
-    };
-    this.eventSource.onmessage = (event) => {
-      this.zone.run(() => {
-        if (this.paused) {
-          this.buffered.push(event.data);
-          return;
-        }
-        this.appendLine(event.data);
-      });
-    };
-    this.eventSource.addEventListener('error', (event) => {
-      this.zone.run(() => {
-        if ((event as MessageEvent).data) {
-          this.error = (event as MessageEvent).data;
-        }
-      });
+    const url = `${environment.apiUrl}/logs/stream`;
+    this.streamController = new AbortController();
+    this.streamTask = this.streamLogs(url, token, this.streamController.signal).finally(() => {
+      this.streamTask = undefined;
     });
   }
 
   ngOnDestroy() {
-    this.eventSource?.close();
+    this.streamController?.abort();
+    this.streamController = undefined;
   }
 
   togglePause() {
@@ -139,5 +121,101 @@ export class LogsComponent implements OnInit, OnDestroy {
         el.scrollTop = el.scrollHeight;
       });
     }
+  }
+
+  private async streamLogs(url: string, token: string, signal: AbortSignal): Promise<void> {
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Accept: 'text/event-stream',
+          Authorization: `Bearer ${token}`
+        },
+        cache: 'no-store',
+        signal
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Log stream request failed (${response.status}).`);
+      }
+
+      this.zone.run(() => {
+        this.connected = true;
+        this.error = '';
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (!signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        buffer = this.consumeSseBuffer(buffer);
+      }
+
+      if (!signal.aborted) {
+        this.zone.run(() => {
+          this.connected = false;
+          this.error = 'Log stream disconnected.';
+        });
+      }
+    } catch (error) {
+      if (signal.aborted) {
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Log stream disconnected.';
+      this.zone.run(() => {
+        this.connected = false;
+        this.error = message;
+      });
+    }
+  }
+
+  private consumeSseBuffer(buffer: string): string {
+    const normalized = buffer.replace(/\r\n/g, '\n');
+    let remaining = normalized;
+    let boundary = remaining.indexOf('\n\n');
+
+    while (boundary >= 0) {
+      const rawEvent = remaining.slice(0, boundary);
+      this.handleSseEvent(rawEvent);
+      remaining = remaining.slice(boundary + 2);
+      boundary = remaining.indexOf('\n\n');
+    }
+
+    return remaining;
+  }
+
+  private handleSseEvent(rawEvent: string): void {
+    if (!rawEvent.trim()) return;
+
+    let eventName = 'message';
+    const dataLines: string[] = [];
+    for (const line of rawEvent.split('\n')) {
+      if (line.startsWith('event:')) {
+        eventName = line.slice('event:'.length).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice('data:'.length).trimStart());
+      }
+    }
+
+    const data = dataLines.join('\n');
+    this.zone.run(() => {
+      if (eventName === 'error') {
+        this.error = data || 'Log stream error.';
+        return;
+      }
+
+      if (this.paused) {
+        this.buffered.push(data);
+        return;
+      }
+
+      this.appendLine(data);
+    });
   }
 }
