@@ -29,6 +29,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<ImageFetchService>();
 builder.Services.AddSingleton<HouseholdAiSettingsService>();
 builder.Services.AddScoped<AiModelCatalogService>();
+builder.Services.AddScoped<IPaperCardVisionService, PaperCardVisionService>();
 
 // Auth services
 builder.Services.AddSingleton<GoogleTokenValidator>();

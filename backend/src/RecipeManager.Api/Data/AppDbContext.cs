@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<HouseholdMember> HouseholdMembers => Set<HouseholdMember>();
     public DbSet<HouseholdInvite> HouseholdInvites => Set<HouseholdInvite>();
     public DbSet<HouseholdActivityLog> HouseholdActivityLogs => Set<HouseholdActivityLog>();
+    public DbSet<PaperCardImportDraft> PaperCardImportDrafts => Set<PaperCardImportDraft>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
@@ -55,6 +56,12 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(l => new { l.HouseholdId, l.CreatedAtUtc });
             entity.Property(l => l.EventType).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<PaperCardImportDraft>(entity =>
+        {
+            entity.HasIndex(d => new { d.HouseholdId, d.CreatedAtUtc });
+            entity.HasIndex(d => d.ExpiresAtUtc);
         });
 
         modelBuilder.Entity<FavoriteRecipe>(entity =>

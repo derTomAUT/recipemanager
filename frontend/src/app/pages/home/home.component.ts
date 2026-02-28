@@ -20,6 +20,7 @@ import { RecipeDraftService } from '../../services/recipe-draft.service';
           <p class="hero-subtitle">Import recipes, curate your favorites, and let the kitchen feel like home.</p>
           <div class="hero-actions">
             <button class="btn btn-primary" type="button" (click)="openImportModal()">Import Recipe</button>
+            <a routerLink="/import/paper-card" class="btn btn-secondary">Import from Paper Card</a>
             <a routerLink="/recipes/new" class="btn btn-secondary">New Recipe</a>
             <a routerLink="/recipes" class="btn btn-secondary">Browse All</a>
           </div>

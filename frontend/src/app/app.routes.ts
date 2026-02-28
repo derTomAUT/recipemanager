@@ -5,6 +5,7 @@ export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./pages/login/login.component').then(m => m.LoginComponent) },
   { path: 'household/setup', loadComponent: () => import('./pages/household-setup/household-setup.component').then(m => m.HouseholdSetupComponent) },
   { path: 'household/settings', canActivate: [authGuard], loadComponent: () => import('./pages/household-settings/household-settings.component').then(m => m.HouseholdSettingsComponent) },
+  { path: 'import/paper-card', canActivate: [authGuard], loadComponent: () => import('./pages/paper-card-import/paper-card-import.component').then(m => m.PaperCardImportComponent) },
   { path: 'home', canActivate: [authGuard], loadComponent: () => import('./pages/home/home.component').then(m => m.HomeComponent) },
   { path: '', redirectTo: '/home', pathMatch: 'full' },
   { path: 'recipes', canActivate: [authGuard], loadComponent: () => import('./pages/recipe-list/recipe-list.component').then(m => m.RecipeListComponent) },

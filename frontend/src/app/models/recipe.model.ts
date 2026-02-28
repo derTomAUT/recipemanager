@@ -106,6 +106,34 @@ export interface CandidateImageInput {
   orderIndex: number;
 }
 
+export interface PaperCardParseResponse {
+  draftId: string;
+  title: string;
+  description?: string;
+  ingredientsByServings: Record<number, IngredientInput[]>;
+  servingsAvailable: number[];
+  steps: StepInput[];
+  importedImages: ImportedImageInput[];
+  confidenceScore?: number;
+  warnings: string[];
+}
+
+export interface PaperCardCommitRequest {
+  draftId: string;
+  selectedServings: number;
+  title?: string;
+  description?: string;
+  ingredients?: IngredientInput[];
+  steps?: StepInput[];
+  tags?: string[];
+  prepMinutes?: number;
+  cookMinutes?: number;
+}
+
+export interface PaperCardCommitResponse {
+  recipeId: string;
+}
+
 export interface CookEvent {
   id: string;
   recipeId: string;
