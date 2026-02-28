@@ -6,6 +6,7 @@ import { RecipeService } from '../../services/recipe.service';
 import { Recipe } from '../../models/recipe.model';
 import { RecipeImportService } from '../../services/recipe-import.service';
 import { RecipeDraftService } from '../../services/recipe-draft.service';
+import { getHttpErrorMessage } from '../../utils/http-error.utils';
 
 @Component({
   selector: 'app-home',
@@ -195,9 +196,9 @@ export class HomeComponent implements OnInit {
         this.importUrl = '';
         this.router.navigate(['/recipes/new']);
       },
-      error: () => {
+      error: (error) => {
         this.importing = false;
-        this.importError = 'Failed to import recipe from URL.';
+        this.importError = getHttpErrorMessage(error, 'Failed to import recipe from URL.');
         this.cdr.detectChanges();
       }
     });

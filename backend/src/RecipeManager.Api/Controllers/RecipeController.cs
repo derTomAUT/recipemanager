@@ -486,10 +486,24 @@ public class RecipeController : ControllerBase
             var draft = await importService.ImportFromUrlAsync(request.Url, household, userId.Value);
             return Ok(draft);
         }
+        catch (HttpRequestException ex)
+        {
+            var statusCode = ex.StatusCode.HasValue ? (int)ex.StatusCode.Value : 0;
+            var reason = statusCode > 0
+                ? $"Could not fetch the recipe page (HTTP {statusCode}). The website may block automated access."
+                : "Could not fetch the recipe page. Check the URL and try again.";
+            _logger.LogWarning(ex, "Recipe import URL fetch failed: {Url}", request.Url);
+            return StatusCode(502, reason);
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Recipe import timed out: {Url}", request.Url);
+            return StatusCode(504, "Fetching the recipe page timed out. Please try again.");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to import recipe from URL: {Url}", request.Url);
-            return StatusCode(502, "Failed to import recipe from URL");
+            return StatusCode(502, "Failed to import recipe from the provided URL.");
         }
     }
 
