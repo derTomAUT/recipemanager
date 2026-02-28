@@ -31,6 +31,8 @@ export class DebugComponent implements OnInit, OnDestroy {
   totalCount = 0;
   provider = '';
   operation = '';
+  operations: string[] = [];
+  operationsError = '';
   success: SuccessFilter = 'all';
   expandedRequest = new Set<string>();
   expandedResponse = new Set<string>();
@@ -64,6 +66,7 @@ export class DebugComponent implements OnInit, OnDestroy {
       }
     });
 
+    this.loadOperations();
     this.handleTabChanged();
   }
 
@@ -124,6 +127,19 @@ export class DebugComponent implements OnInit, OnDestroy {
     this.operation = '';
     this.success = 'all';
     this.loadAiLogs(1);
+  }
+
+  private loadOperations(): void {
+    this.operationsError = '';
+    this.debugService.getAiOperations().subscribe({
+      next: (operations) => {
+        this.operations = operations;
+      },
+      error: () => {
+        this.operations = [];
+        this.operationsError = 'Could not load operation list.';
+      }
+    });
   }
 
   get hasPreviousPage(): boolean {

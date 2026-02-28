@@ -472,7 +472,7 @@ public class MealAssistantService
                 userId,
                 provider,
                 model,
-                "MealAssistant",
+                AiOperation.MealAssistant,
                 requestJson,
                 responseJson,
                 statusCode,

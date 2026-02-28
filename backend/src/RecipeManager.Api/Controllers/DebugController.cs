@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RecipeManager.Api.Data;
 using RecipeManager.Api.DTOs;
+using RecipeManager.Api.Services;
 
 namespace RecipeManager.Api.Controllers;
 
@@ -81,5 +82,11 @@ public class DebugController : ControllerBase
             .ToListAsync();
 
         return Ok(new PagedResult<AiDebugLogDto>(items, totalCount, page, pageSize));
+    }
+
+    [HttpGet("ai/operations")]
+    public ActionResult<List<string>> GetAiOperations()
+    {
+        return Ok(AiOperationMapper.KnownOperations.ToList());
     }
 }

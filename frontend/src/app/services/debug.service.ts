@@ -20,4 +20,8 @@ export class DebugService {
 
     return this.http.get<AiDebugPagedResult>(`${this.apiUrl}/ai`, { params });
   }
+
+  getAiOperations(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/ai/operations`);
+  }
 }

@@ -35,10 +35,10 @@ public class AiModelCatalogService
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("OpenAI models request failed: {Status} {Body}", response.StatusCode, body);
-                await _debugLogService.LogAsync(householdId, userId, provider, "-", "ModelList", requestPayload, body, (int)response.StatusCode, false, "OpenAI models request failed");
+                await _debugLogService.LogAsync(householdId, userId, provider, "-", AiOperation.ModelList, requestPayload, body, (int)response.StatusCode, false, "OpenAI models request failed");
                 response.EnsureSuccessStatusCode();
             }
-            await _debugLogService.LogAsync(householdId, userId, provider, "-", "ModelList", requestPayload, body, (int)response.StatusCode, true, null);
+            await _debugLogService.LogAsync(householdId, userId, provider, "-", AiOperation.ModelList, requestPayload, body, (int)response.StatusCode, true, null);
             using var doc = JsonDocument.Parse(body);
             return doc.RootElement.GetProperty("data")
                 .EnumerateArray()
@@ -59,10 +59,10 @@ public class AiModelCatalogService
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("Anthropic models request failed: {Status} {Body}", response.StatusCode, body);
-                await _debugLogService.LogAsync(householdId, userId, provider, "-", "ModelList", requestPayload, body, (int)response.StatusCode, false, "Anthropic models request failed");
+                await _debugLogService.LogAsync(householdId, userId, provider, "-", AiOperation.ModelList, requestPayload, body, (int)response.StatusCode, false, "Anthropic models request failed");
                 response.EnsureSuccessStatusCode();
             }
-            await _debugLogService.LogAsync(householdId, userId, provider, "-", "ModelList", requestPayload, body, (int)response.StatusCode, true, null);
+            await _debugLogService.LogAsync(householdId, userId, provider, "-", AiOperation.ModelList, requestPayload, body, (int)response.StatusCode, true, null);
             using var doc = JsonDocument.Parse(body);
             return doc.RootElement.GetProperty("data")
                 .EnumerateArray()

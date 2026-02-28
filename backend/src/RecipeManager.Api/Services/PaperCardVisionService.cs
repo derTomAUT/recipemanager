@@ -545,7 +545,7 @@ public class PaperCardVisionService : IPaperCardVisionService
             userId,
             provider,
             model,
-            "PaperCardImport",
+            AiOperation.PaperCardImport,
             requestJson,
             responseJson,
             statusCode,

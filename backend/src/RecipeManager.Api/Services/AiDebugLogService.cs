@@ -61,6 +61,31 @@ public class AiDebugLogService
         }
     }
 
+    public Task LogAsync(
+        Guid? householdId,
+        Guid? userId,
+        string provider,
+        string model,
+        AiOperation operation,
+        string? requestJson,
+        string? responseJson,
+        int? statusCode,
+        bool success,
+        string? error)
+    {
+        return LogAsync(
+            householdId,
+            userId,
+            provider,
+            model,
+            operation.ToStorageValue(),
+            requestJson,
+            responseJson,
+            statusCode,
+            success,
+            error);
+    }
+
     private static string SanitizePayload(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))

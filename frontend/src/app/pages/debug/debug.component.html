@@ -17,7 +17,10 @@
       </label>
       <label>
         <span>Operation</span>
-        <input [(ngModel)]="operation" placeholder="RecipeImport, ModelList..." />
+        <select [(ngModel)]="operation">
+          <option value="">All operations</option>
+          <option *ngFor="let op of operations" [value]="op">{{ op }}</option>
+        </select>
       </label>
       <label>
         <span>Success</span>
@@ -34,6 +37,7 @@
     </div>
 
     <div *ngIf="aiError" class="error">{{ aiError }}</div>
+    <div *ngIf="operationsError" class="error">{{ operationsError }}</div>
     <div *ngIf="aiLoading" class="loading">Loading AI calls...</div>
 
     <div *ngIf="!aiLoading && aiEntries.length === 0" class="empty card">No AI calls found.</div>
