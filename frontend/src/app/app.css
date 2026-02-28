@@ -61,8 +61,13 @@
 }
 
 .nav-icon {
-  font-size: 0.95rem;
-  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  flex: 0 0 auto;
 }
 
 .nav-label {

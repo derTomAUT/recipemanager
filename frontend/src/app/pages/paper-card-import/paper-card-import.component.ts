@@ -6,6 +6,7 @@ import { IngredientInput, ImportedImageInput, PaperCardParseResponse, StepInput 
 import { PaperCardImportService } from '../../services/paper-card-import.service';
 import { resolveImageUrl } from '../../utils/url.utils';
 import { getApiErrorMessage } from '../household-settings/household-settings.utils';
+import { applyCropHandleDrag, CropHandle, CropRect } from './paper-card-import-crop.utils';
 
 type ImageSide = 'front' | 'back';
 
@@ -58,7 +59,7 @@ interface ParsedImageEditState {
             {{ uploadCollapsed ? 'Show Upload Editor' : 'Hide Upload Editor' }}
           </button>
         </div>
-        <p class="help" *ngIf="!uploadCollapsed">Upload front and back, then rotate and drag to crop each image before parsing.</p>
+        <p class="help" *ngIf="!uploadCollapsed">Upload front and back, then rotate and drag crop handles to frame each image before parsing.</p>
 
         <div class="editor-grid" *ngIf="!uploadCollapsed">
           <div class="editor-panel">
@@ -67,17 +68,18 @@ interface ParsedImageEditState {
             <small *ngIf="frontEdit">{{ frontEdit.sourceFile.name }}</small>
 
             <div class="preview-shell" *ngIf="frontEdit">
-              <canvas
-                #frontCanvas
-                class="preview-canvas"
-                (pointerdown)="onPreviewPointerDown('front', $event)">
-              </canvas>
+              <canvas #frontCanvas class="preview-canvas"></canvas>
               <div
                 class="crop-overlay"
                 [style.left.%]="frontEdit.cropX"
                 [style.top.%]="frontEdit.cropY"
                 [style.width.%]="frontEdit.cropWidth"
                 [style.height.%]="frontEdit.cropHeight">
+                <div
+                  *ngFor="let handle of cropHandleOrder"
+                  [class]="'crop-handle crop-handle-' + handle"
+                  (pointerdown)="onCropHandlePointerDown('front', handle, $event)">
+                </div>
               </div>
             </div>
 
@@ -97,17 +99,18 @@ interface ParsedImageEditState {
             <small *ngIf="backEdit">{{ backEdit.sourceFile.name }}</small>
 
             <div class="preview-shell" *ngIf="backEdit">
-              <canvas
-                #backCanvas
-                class="preview-canvas"
-                (pointerdown)="onPreviewPointerDown('back', $event)">
-              </canvas>
+              <canvas #backCanvas class="preview-canvas"></canvas>
               <div
                 class="crop-overlay"
                 [style.left.%]="backEdit.cropX"
                 [style.top.%]="backEdit.cropY"
                 [style.width.%]="backEdit.cropWidth"
                 [style.height.%]="backEdit.cropHeight">
+                <div
+                  *ngFor="let handle of cropHandleOrder"
+                  [class]="'crop-handle crop-handle-' + handle"
+                  (pointerdown)="onCropHandlePointerDown('back', handle, $event)">
+                </div>
               </div>
             </div>
 
@@ -143,17 +146,18 @@ interface ParsedImageEditState {
           <div class="parsed-editor" *ngFor="let editor of parsedImageEditors; let i = index">
             <h4>{{ editor.isTitleImage ? 'Hero Image' : ('Step Image ' + i) }}</h4>
             <div class="preview-shell">
-              <canvas
-                #parsedCanvas
-                class="preview-canvas"
-                (pointerdown)="onParsedPointerDown(i, $event)">
-              </canvas>
+              <canvas #parsedCanvas class="preview-canvas"></canvas>
               <div
                 class="crop-overlay"
                 [style.left.%]="editor.cropX"
                 [style.top.%]="editor.cropY"
                 [style.width.%]="editor.cropWidth"
                 [style.height.%]="editor.cropHeight">
+                <div
+                  *ngFor="let handle of cropHandleOrder"
+                  [class]="'crop-handle crop-handle-' + handle"
+                  (pointerdown)="onParsedCropHandlePointerDown(i, handle, $event)">
+                </div>
               </div>
             </div>
             <div class="control-row">
@@ -218,7 +222,16 @@ interface ParsedImageEditState {
     .editor-panel { background: var(--surface-2); border-radius: var(--radius-sm); padding: 0.75rem; display: grid; gap: 0.55rem; }
     .preview-shell { position: relative; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid color-mix(in srgb, var(--text) 18%, transparent); width: fit-content; max-width: 100%; }
     .preview-canvas { display: block; max-width: 100%; touch-action: none; cursor: crosshair; background: color-mix(in srgb, var(--surface) 86%, black); }
-    .crop-overlay { position: absolute; border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 20%, transparent); box-sizing: border-box; pointer-events: none; }
+    .crop-overlay { position: absolute; border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 20%, transparent); box-sizing: border-box; pointer-events: auto; touch-action: none; }
+    .crop-handle { position: absolute; width: 22px; height: 22px; border-radius: 999px; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 1px color-mix(in srgb, black 24%, transparent); pointer-events: auto; touch-action: none; }
+    .crop-handle-n { left: 50%; top: 0; transform: translate(-50%, -50%); cursor: n-resize; }
+    .crop-handle-s { left: 50%; bottom: 0; transform: translate(-50%, 50%); cursor: s-resize; }
+    .crop-handle-e { right: 0; top: 50%; transform: translate(50%, -50%); cursor: e-resize; }
+    .crop-handle-w { left: 0; top: 50%; transform: translate(-50%, -50%); cursor: w-resize; }
+    .crop-handle-ne { right: 0; top: 0; transform: translate(50%, -50%); cursor: nesw-resize; }
+    .crop-handle-se { right: 0; bottom: 0; transform: translate(50%, 50%); cursor: nwse-resize; }
+    .crop-handle-sw { left: 0; bottom: 0; transform: translate(-50%, 50%); cursor: nesw-resize; }
+    .crop-handle-nw { left: 0; top: 0; transform: translate(-50%, -50%); cursor: nwse-resize; }
     .control-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; }
     .meta { color: var(--muted); font-size: 0.9rem; }
     .field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.75rem; }
@@ -270,9 +283,12 @@ export class PaperCardImportComponent implements OnDestroy, AfterViewInit {
   ingredientsByServings: Record<number, IngredientInput[]> = {};
   ingredients: IngredientInput[] = [];
   steps: StepInput[] = [];
+  readonly cropHandleOrder: CropHandle[] = ['n', 'e', 's', 'w', 'ne', 'se', 'sw', 'nw'];
 
-  private dragState: { side: ImageSide; startX: number; startY: number } | null = null;
-  private parsedDragState: { index: number; startX: number; startY: number } | null = null;
+  private handleDragState:
+    | { type: 'side'; side: ImageSide; handle: CropHandle; startX: number; startY: number; startCrop: CropRect }
+    | { type: 'parsed'; index: number; handle: CropHandle; startX: number; startY: number; startCrop: CropRect }
+    | null = null;
 
   constructor(
     private paperCardImportService: PaperCardImportService,
@@ -299,24 +315,12 @@ export class PaperCardImportComponent implements OnDestroy, AfterViewInit {
 
   @HostListener('window:pointermove', ['$event'])
   onWindowPointerMove(event: PointerEvent) {
-    if (this.dragState) {
-      this.updateDrag(event);
-    }
-    if (this.parsedDragState) {
-      this.updateParsedDrag(event);
-    }
+    this.updateHandleDrag(event, false);
   }
 
   @HostListener('window:pointerup', ['$event'])
   onWindowPointerUp(event: PointerEvent) {
-    if (this.dragState) {
-      this.updateDrag(event);
-      this.dragState = null;
-    }
-    if (this.parsedDragState) {
-      this.updateParsedDrag(event);
-      this.parsedDragState = null;
-    }
+    this.updateHandleDrag(event, true);
   }
 
   get canParse(): boolean {
@@ -354,21 +358,35 @@ export class PaperCardImportComponent implements OnDestroy, AfterViewInit {
     state.cropHeight = 100;
   }
 
-  onPreviewPointerDown(side: ImageSide, event: PointerEvent) {
+  onCropHandlePointerDown(side: ImageSide, handle: CropHandle, event: PointerEvent) {
+    const state = this.getEditState(side);
     const canvas = this.getCanvas(side);
-    if (!canvas) return;
+    if (!canvas || !state || state.previewWidth <= 0 || state.previewHeight <= 0) return;
     const point = this.toCanvasPoint(canvas, event);
-    this.dragState = { side, startX: point.x, startY: point.y };
-    this.updateCropFromDrag(side, point.x, point.y);
+    this.handleDragState = {
+      type: 'side',
+      side,
+      handle,
+      startX: point.x,
+      startY: point.y,
+      startCrop: this.toCropRect(state)
+    };
     event.preventDefault();
   }
 
-  onParsedPointerDown(index: number, event: PointerEvent) {
+  onParsedCropHandlePointerDown(index: number, handle: CropHandle, event: PointerEvent) {
+    const state = this.parsedImageEditors[index];
     const canvas = this.getParsedCanvas(index);
-    if (!canvas) return;
+    if (!canvas || !state || state.previewWidth <= 0 || state.previewHeight <= 0) return;
     const point = this.toCanvasPoint(canvas, event);
-    this.parsedDragState = { index, startX: point.x, startY: point.y };
-    this.updateParsedCropFromDrag(index, point.x, point.y);
+    this.handleDragState = {
+      type: 'parsed',
+      index,
+      handle,
+      startX: point.x,
+      startY: point.y,
+      startCrop: this.toCropRect(state)
+    };
     event.preventDefault();
   }
 
@@ -476,13 +494,6 @@ export class PaperCardImportComponent implements OnDestroy, AfterViewInit {
     editor.cropHeight = 100;
   }
 
-  normalizeParsedCrop(editor: ParsedImageEditState) {
-    editor.cropX = this.clamp(editor.cropX, 0, 99);
-    editor.cropY = this.clamp(editor.cropY, 0, 99);
-    editor.cropWidth = this.clamp(editor.cropWidth, 1, 100 - editor.cropX);
-    editor.cropHeight = this.clamp(editor.cropHeight, 1, 100 - editor.cropY);
-  }
-
   async applyParsedImageEdit(editor: ParsedImageEditState) {
     if (!this.parsed) return;
     editor.applying = true;
@@ -508,55 +519,30 @@ export class PaperCardImportComponent implements OnDestroy, AfterViewInit {
     }
   }
 
-  private updateDrag(event: PointerEvent) {
-    if (!this.dragState) return;
-    const canvas = this.getCanvas(this.dragState.side);
-    if (!canvas) return;
+  private updateHandleDrag(event: PointerEvent, finalize: boolean) {
+    const drag = this.handleDragState;
+    if (!drag) return;
+
+    const targetState = drag.type === 'side' ? this.getEditState(drag.side) : this.parsedImageEditors[drag.index];
+    const canvas = drag.type === 'side' ? this.getCanvas(drag.side) : this.getParsedCanvas(drag.index);
+    if (!targetState || !canvas || targetState.previewWidth <= 0 || targetState.previewHeight <= 0) {
+      if (finalize) this.handleDragState = null;
+      return;
+    }
+
     const point = this.toCanvasPoint(canvas, event);
-    this.updateCropFromDrag(this.dragState.side, point.x, point.y);
-  }
+    const deltaXPercent = ((point.x - drag.startX) / targetState.previewWidth) * 100;
+    const deltaYPercent = ((point.y - drag.startY) / targetState.previewHeight) * 100;
+    const next = applyCropHandleDrag(drag.startCrop, drag.handle, deltaXPercent, deltaYPercent, 1);
 
-  private updateParsedDrag(event: PointerEvent) {
-    if (!this.parsedDragState) return;
-    const canvas = this.getParsedCanvas(this.parsedDragState.index);
-    if (!canvas) return;
-    const point = this.toCanvasPoint(canvas, event);
-    this.updateParsedCropFromDrag(this.parsedDragState.index, point.x, point.y);
-  }
+    targetState.cropX = next.cropX;
+    targetState.cropY = next.cropY;
+    targetState.cropWidth = next.cropWidth;
+    targetState.cropHeight = next.cropHeight;
 
-  private updateCropFromDrag(side: ImageSide, currentX: number, currentY: number) {
-    const state = this.getEditState(side);
-    const drag = this.dragState;
-    if (!state || !drag || drag.side !== side || state.previewWidth <= 0 || state.previewHeight <= 0) return;
-
-    const left = Math.min(drag.startX, currentX);
-    const right = Math.max(drag.startX, currentX);
-    const top = Math.min(drag.startY, currentY);
-    const bottom = Math.max(drag.startY, currentY);
-
-    state.cropX = (left / state.previewWidth) * 100;
-    state.cropY = (top / state.previewHeight) * 100;
-    state.cropWidth = ((right - left) / state.previewWidth) * 100;
-    state.cropHeight = ((bottom - top) / state.previewHeight) * 100;
-
-    this.normalizeCrop(state);
-  }
-
-  private updateParsedCropFromDrag(index: number, currentX: number, currentY: number) {
-    const state = this.parsedImageEditors[index];
-    const drag = this.parsedDragState;
-    if (!state || !drag || drag.index !== index || state.previewWidth <= 0 || state.previewHeight <= 0) return;
-
-    const left = Math.min(drag.startX, currentX);
-    const right = Math.max(drag.startX, currentX);
-    const top = Math.min(drag.startY, currentY);
-    const bottom = Math.max(drag.startY, currentY);
-
-    state.cropX = (left / state.previewWidth) * 100;
-    state.cropY = (top / state.previewHeight) * 100;
-    state.cropWidth = ((right - left) / state.previewWidth) * 100;
-    state.cropHeight = ((bottom - top) / state.previewHeight) * 100;
-    this.normalizeParsedCrop(state);
+    if (finalize) {
+      this.handleDragState = null;
+    }
   }
 
   private toCanvasPoint(canvas: HTMLCanvasElement, event: PointerEvent): { x: number; y: number } {
@@ -566,13 +552,6 @@ export class PaperCardImportComponent implements OnDestroy, AfterViewInit {
     const x = this.clamp(event.clientX - rect.left, 0, rect.width) * scaleX;
     const y = this.clamp(event.clientY - rect.top, 0, rect.height) * scaleY;
     return { x, y };
-  }
-
-  private normalizeCrop(state: ImageEditState) {
-    state.cropX = this.clamp(state.cropX, 0, 99);
-    state.cropY = this.clamp(state.cropY, 0, 99);
-    state.cropWidth = this.clamp(state.cropWidth, 1, 100 - state.cropX);
-    state.cropHeight = this.clamp(state.cropHeight, 1, 100 - state.cropY);
   }
 
   private async replaceEditState(side: ImageSide, file: File): Promise<void> {
@@ -808,5 +787,14 @@ export class PaperCardImportComponent implements OnDestroy, AfterViewInit {
 
   private clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
+  }
+
+  private toCropRect(state: { cropX: number; cropY: number; cropWidth: number; cropHeight: number }): CropRect {
+    return {
+      cropX: state.cropX,
+      cropY: state.cropY,
+      cropWidth: state.cropWidth,
+      cropHeight: state.cropHeight
+    };
   }
 }

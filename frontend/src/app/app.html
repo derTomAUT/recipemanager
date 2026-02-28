@@ -1,25 +1,25 @@
 <header class="top-nav" *ngIf="showNavbar">
   <nav class="center-links">
     <a routerLink="/home" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">&#8962;</span>
+      <lucide-angular class="nav-icon" [img]="homeIcon" [strokeWidth]="1.9" aria-hidden="true"></lucide-angular>
       <span class="nav-label">Home</span>
     </a>
     <a routerLink="/recipes" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">&#9776;</span>
+      <lucide-angular class="nav-icon" [img]="recipesIcon" [strokeWidth]="1.9" aria-hidden="true"></lucide-angular>
       <span class="nav-label">Recipes</span>
     </a>
     <a routerLink="/household/settings" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">&#9881;</span>
+      <lucide-angular class="nav-icon" [img]="householdIcon" [strokeWidth]="1.9" aria-hidden="true"></lucide-angular>
       <span class="nav-label">Household</span>
     </a>
     <a routerLink="/debug" routerLinkActive="active">
-      <span class="nav-icon" aria-hidden="true">&#128269;</span>
+      <lucide-angular class="nav-icon" [img]="debugIcon" [strokeWidth]="1.9" aria-hidden="true"></lucide-angular>
       <span class="nav-label">Debug</span>
     </a>
   </nav>
 
   <button class="logout-link" type="button" (click)="logout()">
-    <span class="nav-icon" aria-hidden="true">&#8617;</span>
+    <lucide-angular class="nav-icon" [img]="logoutIcon" [strokeWidth]="1.9" aria-hidden="true"></lucide-angular>
     <span class="nav-label">Logout</span>
   </button>
 </header>

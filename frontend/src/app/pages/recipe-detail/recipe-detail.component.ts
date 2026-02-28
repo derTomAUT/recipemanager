@@ -16,6 +16,7 @@ import { RecipeDetail } from '../../models/recipe.model';
           <div *ngIf="recipe.sourceUrl" class="source-url">{{ recipe.sourceUrl }}</div>
         </div>
         <div class="header-actions">
+          <a routerLink="/recipes" class="btn btn-secondary">Back to Recipes</a>
           <button (click)="markCooked()" [disabled]="marking" class="btn btn-primary">
             {{ marking ? 'Marking...' : 'Mark as Cooked' }}
           </button>

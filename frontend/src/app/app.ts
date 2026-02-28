@@ -3,15 +3,21 @@ import { CommonModule } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from './services/auth.service';
+import { BookOpenText, Bug, House, LogOut, LucideAngularModule, Settings } from 'lucide-angular';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
 export class App {
   protected readonly title = signal('frontend');
+  readonly homeIcon = House;
+  readonly recipesIcon = BookOpenText;
+  readonly householdIcon = Settings;
+  readonly debugIcon = Bug;
+  readonly logoutIcon = LogOut;
 
   currentUrl = '/';
 
