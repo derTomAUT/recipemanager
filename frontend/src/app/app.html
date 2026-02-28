@@ -27,3 +27,15 @@
 <main class="app-content" [class.with-navbar]="showNavbar">
   <router-outlet />
 </main>
+
+<section class="update-prompt" *ngIf="updateAvailable" role="status" aria-live="polite">
+  <p>New version available. Refresh?</p>
+  <div class="update-actions">
+    <button type="button" class="update-btn update-btn-primary" [disabled]="activatingUpdate" (click)="refreshToLatest()">
+      {{ activatingUpdate ? 'Refreshing...' : 'Refresh' }}
+    </button>
+    <button type="button" class="update-btn update-btn-secondary" [disabled]="activatingUpdate" (click)="dismissUpdatePrompt()">
+      Later
+    </button>
+  </div>
+</section>

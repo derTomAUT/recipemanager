@@ -78,6 +78,59 @@
   padding-top: 0.25rem;
 }
 
+.update-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 1200;
+  min-width: min(92vw, 360px);
+  max-width: min(92vw, 420px);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(10px);
+  padding: 0.7rem 0.75rem;
+}
+
+.update-prompt p {
+  margin: 0 0 0.55rem;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.update-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.update-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.42rem 0.65rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.update-btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.update-btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.update-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (max-width: 700px) {
   .top-nav {
     min-height: 52px;
@@ -95,5 +148,10 @@
     min-height: 40px;
     justify-content: center;
     padding: 0.35rem;
+  }
+
+  .update-prompt {
+    bottom: 10px;
+    min-width: min(94vw, 360px);
   }
 }
