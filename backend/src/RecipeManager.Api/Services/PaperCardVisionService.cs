@@ -14,7 +14,17 @@ public record PaperCardVisionResult(
     string? RawFrontText,
     string? RawBackText,
     double? ConfidenceScore,
-    List<string> Warnings
+    List<string> Warnings,
+    ImageRegionDto? HeroImageRegion,
+    List<ImageRegionDto> StepImageRegions
+);
+
+public record ImageRegionDto(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    int RotationDegrees
 );
 
 public interface IPaperCardVisionService
@@ -152,7 +162,9 @@ public class PaperCardVisionService : IPaperCardVisionService
                     content = new object[]
                     {
                         new { type = "text", text = prompt },
+                        new { type = "text", text = "Front side image (title + hero image):" },
                         new { type = "image_url", image_url = new { url = $"data:{frontContentType};base64,{Convert.ToBase64String(frontBytes)}" } },
+                        new { type = "text", text = "Back side image (ingredient table + cooking steps + step photos):" },
                         new { type = "image_url", image_url = new { url = $"data:{backContentType};base64,{Convert.ToBase64String(backBytes)}" } }
                     }
                 }
@@ -175,6 +187,7 @@ public class PaperCardVisionService : IPaperCardVisionService
                     content = new object[]
                     {
                         new { type = "text", text = prompt },
+                        new { type = "text", text = "Front side image (title + hero image):" },
                         new
                         {
                             type = "image",
@@ -185,6 +198,7 @@ public class PaperCardVisionService : IPaperCardVisionService
                                 data = Convert.ToBase64String(frontBytes)
                             }
                         },
+                        new { type = "text", text = "Back side image (ingredient table + cooking steps + step photos):" },
                         new
                         {
                             type = "image",
@@ -223,12 +237,19 @@ public class PaperCardVisionService : IPaperCardVisionService
             "    \"4\": [ ... ]\n" +
             "  },\n" +
             "  \"steps\": [ { \"instruction\": string, \"timerSeconds\": number|null } ],\n" +
+            "  \"heroImageRegion\": { \"x\": number, \"y\": number, \"width\": number, \"height\": number, \"rotationDegrees\": 0|90|180|270 }|null,\n" +
+            "  \"stepImageRegions\": [ { \"x\": number, \"y\": number, \"width\": number, \"height\": number, \"rotationDegrees\": 0|90|180|270 } ],\n" +
             "  \"warnings\": [string],\n" +
             "  \"confidenceScore\": number\n" +
             "}\n" +
             "Rules:\n" +
+            "- The first image is front side and the second image is back side.\n" +
             "- Keep ingredient names exactly as printed where possible.\n" +
             "- If a serving section is missing, return an empty array for that serving key.\n" +
+            "- Extract ingredients from the back-side ingredient table for 2/3/4 servings.\n" +
+            "- heroImageRegion uses normalized coordinates in range [0,1] relative to front image.\n" +
+            "- stepImageRegions uses normalized coordinates in range [0,1] relative to back image.\n" +
+            "- Include every individual step photo on the back side in cooking order.\n" +
             "- Do not include markdown fences.\n";
     }
 
@@ -299,6 +320,20 @@ public class PaperCardVisionService : IPaperCardVisionService
                 .ToList();
         }
 
+        var heroRegion = TryParseRegion(root, "heroImageRegion");
+        var stepRegions = new List<ImageRegionDto>();
+        if (root.TryGetProperty("stepImageRegions", out var stepRegionsEl) && stepRegionsEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var el in stepRegionsEl.EnumerateArray())
+            {
+                var parsed = TryParseRegion(el);
+                if (parsed != null)
+                {
+                    stepRegions.Add(parsed);
+                }
+            }
+        }
+
         double? confidence = null;
         if (root.TryGetProperty("confidenceScore", out var confidenceEl) && confidenceEl.ValueKind == JsonValueKind.Number && confidenceEl.TryGetDouble(out var score))
         {
@@ -313,8 +348,57 @@ public class PaperCardVisionService : IPaperCardVisionService
             null,
             null,
             confidence ?? 0.55,
-            warnings
+            warnings,
+            heroRegion,
+            stepRegions
         );
+    }
+
+    private static ImageRegionDto? TryParseRegion(JsonElement owner, string propertyName)
+    {
+        if (!owner.TryGetProperty(propertyName, out var regionEl))
+        {
+            return null;
+        }
+
+        return TryParseRegion(regionEl);
+    }
+
+    private static ImageRegionDto? TryParseRegion(JsonElement regionEl)
+    {
+        if (regionEl.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!TryGetDouble(regionEl, "x", out var x) ||
+            !TryGetDouble(regionEl, "y", out var y) ||
+            !TryGetDouble(regionEl, "width", out var width) ||
+            !TryGetDouble(regionEl, "height", out var height))
+        {
+            return null;
+        }
+
+        var rotation = 0;
+        if (regionEl.TryGetProperty("rotationDegrees", out var rotEl) &&
+            rotEl.ValueKind == JsonValueKind.Number &&
+            rotEl.TryGetInt32(out var parsedRotation))
+        {
+            rotation = parsedRotation;
+        }
+
+        return new ImageRegionDto(x, y, width, height, rotation);
+    }
+
+    private static bool TryGetDouble(JsonElement owner, string propertyName, out double value)
+    {
+        value = 0;
+        if (!owner.TryGetProperty(propertyName, out var el))
+        {
+            return false;
+        }
+
+        return el.ValueKind == JsonValueKind.Number && el.TryGetDouble(out value);
     }
 
     private static string SanitizeJson(string? json)
@@ -402,7 +486,9 @@ public class PaperCardVisionService : IPaperCardVisionService
             null,
             null,
             0.25,
-            warnings
+            warnings,
+            null,
+            new List<ImageRegionDto>()
         );
 
     }

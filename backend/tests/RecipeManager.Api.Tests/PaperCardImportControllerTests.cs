@@ -17,6 +17,8 @@ using RecipeManager.Api.DTOs;
 using RecipeManager.Api.Infrastructure.Storage;
 using RecipeManager.Api.Models;
 using RecipeManager.Api.Services;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
 
 public class PaperCardImportControllerTests
@@ -122,12 +124,64 @@ public class PaperCardImportControllerTests
         Assert.Equal(2, recipe.Images.Count);
     }
 
-    private static PaperCardImportController CreateController(AppDbContext db, Guid userId)
+    [Fact]
+    public async Task Parse_UsesHeroAndStepRegionsToCreateImportedImages()
     {
+        await using var db = CreateDb();
+        var user = CreateUser(db, "parse-images@test.com");
+        var household = CreateHousehold(db);
+        CreateMember(db, household.Id, user.Id, "Owner");
+        await db.SaveChangesAsync();
+
+        var fakeVision = new FakePaperCardVisionService(new PaperCardVisionResult(
+            "Test Card",
+            null,
+            new Dictionary<int, List<IngredientDto>>
+            {
+                [2] = [new IngredientDto("Potato", "2", "pcs", null)],
+                [3] = [],
+                [4] = []
+            },
+            [new StepDto("Chop", null), new StepDto("Cook", null)],
+            null,
+            null,
+            0.9,
+            [],
+            new ImageRegionDto(0.1, 0.1, 0.8, 0.5, 0),
+            [new ImageRegionDto(0.05, 0.15, 0.4, 0.3, 1), new ImageRegionDto(0.55, 0.2, 0.4, 0.3, 0)]
+        ));
+
+        var storage = new TestStorageService();
+        var controller = CreateController(db, user.Id, fakeVision, storage);
+        var front = CreateImageFormFile("recipe1_front.jpeg");
+        var back = CreateImageFormFile("recipe1_back.jpeg");
+
+        var result = await controller.Parse(front, back, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var payload = Assert.IsType<PaperCardParseResponseDto>(ok.Value);
+        Assert.Equal(3, payload.ImportedImages.Count);
+        Assert.True(payload.ImportedImages[0].IsTitleImage);
+        Assert.All(payload.ImportedImages.Skip(1), img => Assert.False(img.IsTitleImage));
+        Assert.Equal(3, storage.UploadedFileNames.Count);
+    }
+
+    private static PaperCardImportController CreateController(
+        AppDbContext db,
+        Guid userId,
+        IPaperCardVisionService? vision = null,
+        TestStorageService? storage = null)
+    {
+        storage ??= new TestStorageService();
+        vision ??= new PaperCardVisionService(
+            new HttpClientFactoryStub(),
+            new HouseholdAiSettingsService(new TestDataProtectionProvider()),
+            NullLogger<PaperCardVisionService>.Instance);
+
         var controller = new PaperCardImportController(
             db,
-            new TestStorageService(),
-            new PaperCardVisionService(new HttpClientFactoryStub(), new HouseholdAiSettingsService(new TestDataProtectionProvider()), NullLogger<PaperCardVisionService>.Instance),
+            storage,
+            vision,
             NullLogger<PaperCardImportController>.Instance
         );
 
@@ -192,8 +246,13 @@ public class PaperCardImportControllerTests
 
     private sealed class TestStorageService : IStorageService
     {
+        public List<string> UploadedFileNames { get; } = new();
+
         public Task<string> UploadAsync(Stream fileStream, string fileName, string contentType)
-            => Task.FromResult($"/uploads/{fileName}");
+        {
+            UploadedFileNames.Add(fileName);
+            return Task.FromResult($"/uploads/{fileName}");
+        }
 
         public Task DeleteAsync(string url) => Task.CompletedTask;
     }
@@ -214,5 +273,64 @@ public class PaperCardImportControllerTests
         public Microsoft.AspNetCore.DataProtection.IDataProtector CreateProtector(string purpose) => this;
         public byte[] Protect(byte[] plaintext) => plaintext;
         public byte[] Unprotect(byte[] protectedData) => protectedData;
+    }
+
+    private sealed class FakePaperCardVisionService(PaperCardVisionResult result) : IPaperCardVisionService
+    {
+        public Task<PaperCardVisionResult> ExtractAsync(
+            IFormFile frontImage,
+            IFormFile backImage,
+            Household household,
+            Guid? userId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(result);
+    }
+
+    private static IFormFile CreateImageFormFile(string fileName)
+    {
+        var diskPath = ResolveTestImagePath(fileName);
+        if (diskPath != null)
+        {
+            var diskBytes = File.ReadAllBytes(diskPath);
+            return new FormFile(new MemoryStream(diskBytes), 0, diskBytes.Length, "file", fileName)
+            {
+                Headers = new HeaderDictionary(),
+                ContentType = "image/jpeg"
+            };
+        }
+
+        using var image = new Image<Rgba32>(400, 600, new Rgba32(240, 240, 240));
+        using var generated = new MemoryStream();
+        image.SaveAsPng(generated);
+        var bytes = generated.ToArray();
+        var stream = new MemoryStream(bytes);
+        return new FormFile(stream, 0, bytes.Length, "file", fileName)
+        {
+            Headers = new HeaderDictionary(),
+            ContentType = "image/png"
+        };
+    }
+
+    private static string? ResolveTestImagePath(string fileName)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current != null)
+        {
+            var candidate1 = Path.Combine(current.FullName, "testimages", fileName);
+            if (File.Exists(candidate1))
+            {
+                return candidate1;
+            }
+
+            var candidate2 = Path.Combine(current.FullName, "backend", "src", "RecipeManager.Api", "uploads", "testimages", fileName);
+            if (File.Exists(candidate2))
+            {
+                return candidate2;
+            }
+
+            current = current.Parent;
+        }
+
+        return null;
     }
 }
