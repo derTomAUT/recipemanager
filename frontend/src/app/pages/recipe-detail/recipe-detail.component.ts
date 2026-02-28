@@ -25,6 +25,8 @@ import { RecipeDetail } from '../../models/recipe.model';
       </header>
 
       <div class="recipe-content">
+        <div *ngIf="successMessage" class="success">{{ successMessage }}</div>
+
         <section class="recipe-meta">
           <div *ngIf="recipe.description" class="description">{{ recipe.description }}</div>
           <div class="meta-row">
@@ -119,6 +121,7 @@ import { RecipeDetail } from '../../models/recipe.model';
     .back-link { display: inline-block; margin-top: 2rem; color: var(--primary); }
     .loading { text-align: center; padding: 2rem; }
     .error { color: var(--text); text-align: center; padding: 1rem; background: rgba(217,80,47,0.15); border-radius: 4px; }
+    .success { color: var(--text); margin: 0.5rem 0 1rem; padding: 0.8rem 1rem; background: color-mix(in srgb, var(--secondary) 22%, var(--surface)); border-radius: var(--radius-sm); }
     .not-found { text-align: center; padding: 2rem; color: var(--muted); }
     .not-found a { color: var(--primary); }
     @media (max-width: 900px) {
@@ -138,6 +141,7 @@ export class RecipeDetailComponent implements OnInit {
   loading = false;
   error = '';
   marking = false;
+  successMessage = '';
   heroImage: { url: string } | null = null;
   stepImages: { url: string }[] = [];
 
@@ -204,11 +208,12 @@ export class RecipeDetailComponent implements OnInit {
   markCooked() {
     if (!this.recipe) return;
     this.marking = true;
+    this.successMessage = '';
     this.recipeService.markCooked(this.recipe.id).subscribe({
       next: () => {
         this.marking = false;
         this.recipe!.cookCount++;
-        alert('Recipe marked as cooked!');
+        this.successMessage = 'Recipe marked as cooked.';
       },
       error: () => {
         this.marking = false;

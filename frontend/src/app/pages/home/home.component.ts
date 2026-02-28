@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RecipeService } from '../../services/recipe.service';
-import { AuthService } from '../../services/auth.service';
 import { Recipe } from '../../models/recipe.model';
 import { RecipeImportService } from '../../services/recipe-import.service';
 import { RecipeDraftService } from '../../services/recipe-draft.service';
@@ -26,15 +25,6 @@ import { RecipeDraftService } from '../../services/recipe-draft.service';
           </div>
         </div>
         <div class="hero-panel">
-          <div class="hero-card">
-            <h3>Quick Links</h3>
-            <div class="nav-links">
-              <a routerLink="/recipes" class="chip">All Recipes</a>
-              <a routerLink="/preferences" class="chip">Preferences</a>
-              <a routerLink="/logs" class="chip">Logs</a>
-              <a *ngIf="isOwner" routerLink="/household/settings" class="chip">Household Settings</a>
-            </div>
-          </div>
           <div class="hero-card accent">
             <p class="accent-label">Tonight's vibe</p>
             <h3>Warm, quick, and shareable</h3>
@@ -108,7 +98,6 @@ import { RecipeDraftService } from '../../services/recipe-draft.service';
     .hero-card.accent { background: linear-gradient(135deg, rgba(217,80,47,0.15), rgba(110,159,122,0.15)), var(--surface); }
     .accent-label { text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.12em; color: var(--muted); }
     .eyebrow { text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.7rem; color: var(--muted); margin: 0; }
-    .nav-links { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 
     .section-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
     .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
@@ -142,7 +131,6 @@ export class HomeComponent implements OnInit {
   recommended: Recipe[] = [];
   loading = false;
   error = '';
-  isOwner = false;
   showImportModal = false;
   importUrl = '';
   importing = false;
@@ -150,7 +138,6 @@ export class HomeComponent implements OnInit {
 
   constructor(
     private recipeService: RecipeService,
-    private authService: AuthService,
     private recipeImportService: RecipeImportService,
     private recipeDraftService: RecipeDraftService,
     private router: Router,
@@ -158,9 +145,6 @@ export class HomeComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.authService.user$.subscribe(user => {
-      this.isOwner = user?.role === 'Owner';
-    });
     this.loadRecommendations();
   }
 
