@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../services/auth.service';
+import { getApiErrorMessage } from '../household-settings/household-settings.utils';
 
 @Component({
   selector: 'app-household-setup',
@@ -70,7 +71,10 @@ export class HouseholdSetupComponent {
     this.http.post(`${environment.apiUrl}/household/join`, { inviteCode: this.inviteCode })
       .subscribe({
         next: () => this.onHouseholdCreated(),
-        error: () => this.error = 'Failed to join household. Check the invite code and try again.'
+        error: (error) => this.error = getApiErrorMessage(
+          error,
+          'Failed to join household. Check the invite code and try again.'
+        )
       });
   }
 

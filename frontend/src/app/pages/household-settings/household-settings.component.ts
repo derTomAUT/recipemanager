@@ -3,8 +3,13 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { HouseholdMember, HouseholdSettingsService } from '../../services/household-settings.service';
-import { buildHouseholdInviteLink } from './household-settings.utils';
+import {
+  HouseholdActivityItem,
+  HouseholdInvite,
+  HouseholdMember,
+  HouseholdSettingsService
+} from '../../services/household-settings.service';
+import { buildHouseholdInviteLink, getApiErrorMessage } from './household-settings.utils';
 
 @Component({
   selector: 'app-household-settings',
@@ -24,32 +29,84 @@ import { buildHouseholdInviteLink } from './household-settings.utils';
 
       <section *ngIf="!loading && isOwner" class="card">
         <h2>Invite</h2>
-        <p class="help">Share this invite link with a new household member.</p>
+        <p class="help">Share this invite link with a new household member. Links expire after 5 days.</p>
+        <div *ngIf="inviteInfo" class="invite-meta">
+          <span>Created: {{ inviteInfo.createdAtUtc | date:'medium' }}</span>
+          <span>Expires: {{ inviteInfo.expiresAtUtc | date:'medium' }}</span>
+          <span class="status" [class.status-inactive]="inviteInfo.isExpired">
+            {{ inviteInfo.isExpired ? 'Expired' : 'Active' }}
+          </span>
+        </div>
         <div class="invite-row">
           <input [value]="getInviteLink()" readonly />
           <button class="btn-secondary" type="button" (click)="copyInviteLink()">Copy Link</button>
+          <button class="btn-secondary" type="button" (click)="regenerateInvite()" [disabled]="saving">
+            Regenerate Link
+          </button>
         </div>
       </section>
 
       <section *ngIf="!loading && isOwner" class="card">
         <h2>Members</h2>
+        <p class="help">Owners can disable members. To disable an owner, promote another active member to Owner first.</p>
         <div *ngIf="members.length === 0" class="help">No members found.</div>
         <div *ngFor="let member of members" class="member-row">
           <div class="member-info">
             <strong>{{ member.name }}</strong>
-            <span>{{ member.email }} · {{ member.role }}</span>
+            <span>{{ member.email }} - {{ member.role }}</span>
           </div>
           <div class="member-actions">
+            <label class="role-editor">
+              <span>Role</span>
+              <select
+                [ngModel]="roleDraftByUserId[member.id] ?? member.role"
+                (ngModelChange)="setRoleDraft(member.id, $event)"
+                [disabled]="saving || !member.isActive"
+              >
+                <option value="Owner">Owner</option>
+                <option value="Member">Member</option>
+                <option value="Viewer">Viewer</option>
+              </select>
+            </label>
+            <button
+              class="btn-secondary"
+              type="button"
+              [disabled]="saving || !member.isActive || (roleDraftByUserId[member.id] ?? member.role) === member.role"
+              (click)="updateMemberRole(member)"
+            >
+              Update Role
+            </button>
             <span class="status" [class.status-inactive]="!member.isActive">
               {{ member.isActive ? 'Active' : 'Disabled' }}
             </span>
-            <button *ngIf="member.isActive" class="btn-secondary" type="button" (click)="disableMember(member.id)">
+            <button
+              *ngIf="member.isActive"
+              class="btn-secondary"
+              type="button"
+              [disabled]="saving"
+              (click)="disableMember(member.id)"
+            >
               Disable
             </button>
-            <button *ngIf="!member.isActive" class="btn-secondary" type="button" (click)="enableMember(member.id)">
+            <button
+              *ngIf="!member.isActive"
+              class="btn-secondary"
+              type="button"
+              [disabled]="saving"
+              (click)="enableMember(member.id)"
+            >
               Enable
             </button>
           </div>
+        </div>
+      </section>
+
+      <section *ngIf="!loading && isOwner" class="card">
+        <h2>Household Activity</h2>
+        <div *ngIf="activity.length === 0" class="help">No activity yet.</div>
+        <div *ngFor="let item of activity" class="activity-row">
+          <div class="activity-event">{{ formatActivity(item) }}</div>
+          <div class="activity-time">{{ item.createdAtUtc | date:'medium' }}</div>
         </div>
       </section>
 
@@ -113,7 +170,7 @@ import { buildHouseholdInviteLink } from './household-settings.utils';
     .message { background: color-mix(in srgb, var(--secondary) 20%, var(--surface)); color: var(--text); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; }
     .error-inline { color: var(--primary); font-size: 0.9rem; }
 
-    .card { background: var(--surface); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); border-radius: var(--radius-md); padding: 1.5rem; box-shadow: var(--shadow-soft); }
+    .card { background: var(--surface); border: 1px solid color-mix(in srgb, var(--text) 12%, transparent); border-radius: var(--radius-md); padding: 1.5rem; box-shadow: var(--shadow-soft); margin-bottom: 1rem; }
     .card h2 { margin-top: 0; }
     .help { color: var(--muted); margin-top: 0.25rem; }
 
@@ -124,13 +181,19 @@ import { buildHouseholdInviteLink } from './household-settings.utils';
 
     .actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .hint { color: var(--muted); font-size: 0.9rem; }
-    .invite-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .invite-meta { display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.9rem; color: var(--muted); margin-bottom: 0.5rem; }
+    .invite-row { display: grid; grid-template-columns: 1fr auto auto; gap: 0.5rem; margin-bottom: 0.5rem; }
     .member-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); padding: 0.75rem 0; gap: 1rem; flex-wrap: wrap; }
     .member-info { display: flex; flex-direction: column; gap: 0.125rem; }
     .member-info span { color: var(--muted); font-size: 0.9rem; }
-    .member-actions { display: flex; align-items: center; gap: 0.5rem; }
+    .member-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .role-editor { display: flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.9rem; }
+    .role-editor select { min-width: 105px; }
     .status { font-size: 0.85rem; color: var(--secondary); font-weight: 600; }
     .status-inactive { color: var(--accent); }
+    .activity-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); padding: 0.6rem 0; }
+    .activity-event { font-weight: 600; }
+    .activity-time { color: var(--muted); font-size: 0.85rem; text-align: right; }
   `]
 })
 export class HouseholdSettingsComponent implements OnInit {
@@ -149,8 +212,10 @@ export class HouseholdSettingsComponent implements OnInit {
   hasApiKey = false;
   models: string[] = [];
   householdInviteCode = '';
+  inviteInfo: HouseholdInvite | null = null;
   members: HouseholdMember[] = [];
-
+  activity: HouseholdActivityItem[] = [];
+  roleDraftByUserId: Record<string, string | undefined> = {};
   constructor(
     private authService: AuthService,
     private settingsService: HouseholdSettingsService,
@@ -167,6 +232,8 @@ export class HouseholdSettingsComponent implements OnInit {
         return;
       }
       this.loadHousehold();
+      this.loadInvite();
+      this.loadActivity();
       this.loadSettings();
     });
   }
@@ -203,10 +270,33 @@ export class HouseholdSettingsComponent implements OnInit {
       next: (household) => {
         this.householdInviteCode = household.inviteCode;
         this.members = household.members;
+        this.roleDraftByUserId = {};
+        for (const member of household.members) {
+          this.roleDraftByUserId[member.id] = member.role;
+        }
       },
       error: () => {
         this.error = 'Failed to load household members';
       }
+    });
+  }
+
+  loadInvite() {
+    this.settingsService.getInvite().subscribe({
+      next: (invite) => {
+        this.inviteInfo = invite;
+        this.householdInviteCode = invite.inviteCode;
+      },
+      error: () => {
+        this.error = 'Failed to load invite details';
+      }
+    });
+  }
+
+  loadActivity() {
+    this.settingsService.getActivity().subscribe({
+      next: (items) => this.activity = items,
+      error: () => this.error = 'Failed to load household activity'
     });
   }
 
@@ -297,8 +387,8 @@ export class HouseholdSettingsComponent implements OnInit {
         this.message = 'Settings saved.';
         this.saving = false;
       },
-      error: () => {
-        this.error = 'Failed to save settings';
+      error: (error) => {
+        this.error = getApiErrorMessage(error, 'Failed to save settings');
         this.saving = false;
       }
     });
@@ -317,23 +407,100 @@ export class HouseholdSettingsComponent implements OnInit {
       .catch(() => this.error = 'Failed to copy invite link.');
   }
 
+  regenerateInvite() {
+    this.saving = true;
+    this.settingsService.regenerateInvite().subscribe({
+      next: (invite) => {
+        this.inviteInfo = invite;
+        this.householdInviteCode = invite.inviteCode;
+        this.message = 'Invite link regenerated.';
+        this.error = '';
+        this.saving = false;
+        this.loadActivity();
+      },
+      error: (error) => {
+        this.error = getApiErrorMessage(error, 'Failed to regenerate invite link.');
+        this.saving = false;
+      }
+    });
+  }
+
+  setRoleDraft(userId: string, role: string) {
+    this.roleDraftByUserId[userId] = role;
+  }
+
+  updateMemberRole(member: HouseholdMember) {
+    const nextRole = this.roleDraftByUserId[member.id] ?? member.role;
+    if (nextRole === member.role) return;
+
+    this.saving = true;
+    this.settingsService.updateMemberRole(member.id, nextRole).subscribe({
+      next: () => {
+        this.message = `Role updated to ${nextRole}.`;
+        this.error = '';
+        this.saving = false;
+        this.loadHousehold();
+        this.loadActivity();
+      },
+      error: (error) => {
+        this.error = getApiErrorMessage(error, 'Failed to update role.');
+        this.saving = false;
+      }
+    });
+  }
+
   disableMember(userId: string) {
+    this.saving = true;
     this.settingsService.disableMember(userId).subscribe({
       next: () => {
         this.message = 'Member disabled.';
+        this.error = '';
+        this.saving = false;
         this.loadHousehold();
+        this.loadActivity();
       },
-      error: () => this.error = 'Failed to disable member'
+      error: (error) => {
+        this.error = getApiErrorMessage(error, 'Failed to disable member');
+        this.saving = false;
+      }
     });
   }
 
   enableMember(userId: string) {
+    this.saving = true;
     this.settingsService.enableMember(userId).subscribe({
       next: () => {
         this.message = 'Member enabled.';
+        this.error = '';
+        this.saving = false;
         this.loadHousehold();
+        this.loadActivity();
       },
-      error: () => this.error = 'Failed to enable member'
+      error: (error) => {
+        this.error = getApiErrorMessage(error, 'Failed to enable member');
+        this.saving = false;
+      }
     });
+  }
+
+  formatActivity(item: HouseholdActivityItem): string {
+    switch (item.eventType) {
+      case 'InviteRegenerated':
+        return 'Invite link regenerated';
+      case 'MemberDisabled':
+        return 'Member disabled';
+      case 'MemberEnabled':
+        return 'Member re-enabled';
+      case 'MemberRoleUpdated':
+        return item.details ? `Role changed (${item.details})` : 'Member role changed';
+      case 'MemberJoined':
+        return 'Member joined household';
+      case 'MemberRemoved':
+        return 'Member removed';
+      case 'HouseholdCreated':
+        return 'Household created';
+      default:
+        return item.details || item.eventType;
+    }
   }
 }

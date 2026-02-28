@@ -24,6 +24,22 @@ export interface HouseholdSummary {
   members: HouseholdMember[];
 }
 
+export interface HouseholdInvite {
+  inviteCode: string;
+  createdAtUtc: string;
+  expiresAtUtc: string;
+  isExpired: boolean;
+}
+
+export interface HouseholdActivityItem {
+  id: string;
+  eventType: string;
+  actorUserId?: string;
+  targetUserId?: string;
+  details?: string;
+  createdAtUtc: string;
+}
+
 export interface UpdateHouseholdAiSettingsRequest {
   aiProvider?: string;
   aiModel?: string;
@@ -56,5 +72,21 @@ export class HouseholdSettingsService {
 
   enableMember(userId: string): Observable<void> {
     return this.http.post<void>(`${environment.apiUrl}/household/members/${userId}/enable`, {});
+  }
+
+  updateMemberRole(userId: string, role: string): Observable<void> {
+    return this.http.post<void>(`${environment.apiUrl}/household/members/${userId}/role`, { role });
+  }
+
+  getInvite(): Observable<HouseholdInvite> {
+    return this.http.get<HouseholdInvite>(`${environment.apiUrl}/household/invite`);
+  }
+
+  regenerateInvite(): Observable<HouseholdInvite> {
+    return this.http.post<HouseholdInvite>(`${environment.apiUrl}/household/invite/regenerate`, {});
+  }
+
+  getActivity(): Observable<HouseholdActivityItem[]> {
+    return this.http.get<HouseholdActivityItem[]>(`${environment.apiUrl}/household/activity`);
   }
 }

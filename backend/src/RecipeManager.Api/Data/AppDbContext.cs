@@ -10,6 +10,8 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Household> Households => Set<Household>();
     public DbSet<HouseholdMember> HouseholdMembers => Set<HouseholdMember>();
+    public DbSet<HouseholdInvite> HouseholdInvites => Set<HouseholdInvite>();
+    public DbSet<HouseholdActivityLog> HouseholdActivityLogs => Set<HouseholdActivityLog>();
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
@@ -41,6 +43,18 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<HouseholdMember>(entity =>
         {
             entity.HasIndex(hm => new { hm.HouseholdId, hm.UserId }).IsUnique();
+        });
+
+        modelBuilder.Entity<HouseholdInvite>(entity =>
+        {
+            entity.HasIndex(i => new { i.HouseholdId, i.IsActive });
+            entity.HasIndex(i => i.InviteCode);
+        });
+
+        modelBuilder.Entity<HouseholdActivityLog>(entity =>
+        {
+            entity.HasIndex(l => new { l.HouseholdId, l.CreatedAtUtc });
+            entity.Property(l => l.EventType).HasMaxLength(100);
         });
 
         modelBuilder.Entity<FavoriteRecipe>(entity =>

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RecipeManager.Api.Controllers;
 using RecipeManager.Api.Data;
+using RecipeManager.Api.DTOs;
 using RecipeManager.Api.Models;
 using Xunit;
 
@@ -54,10 +55,10 @@ public class HouseholdControllerTests
     {
         await using var db = CreateDb();
         var owner = CreateUser(db, "owner3@test.com");
-        var other = CreateUser(db, "member3@test.com");
+        var otherOwner = CreateUser(db, "owner3b@test.com");
         var household = CreateHousehold(db);
         CreateMember(db, household.Id, owner.Id, "Owner");
-        CreateMember(db, household.Id, other.Id, "Member");
+        CreateMember(db, household.Id, otherOwner.Id, "Owner");
         await db.SaveChangesAsync();
 
         var controller = CreateController(db, owner.Id);
@@ -83,6 +84,73 @@ public class HouseholdControllerTests
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.Equal("At least one active member must remain in the household", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task DisableMember_RejectsWhenTargetIsLastActiveOwner()
+    {
+        await using var db = CreateDb();
+        var owner = CreateUser(db, "owner5@test.com");
+        var member = CreateUser(db, "member5@test.com");
+        var household = CreateHousehold(db);
+        CreateMember(db, household.Id, owner.Id, "Owner");
+        CreateMember(db, household.Id, member.Id, "Member");
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, owner.Id);
+        var result = await controller.DisableMember(owner.Id);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Cannot disable the last active owner. Promote another member to Owner first.", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task JoinHousehold_RejectsExpiredInviteCode()
+    {
+        await using var db = CreateDb();
+        var owner = CreateUser(db, "owner6@test.com");
+        var joiner = CreateUser(db, "joiner6@test.com");
+        var household = CreateHousehold(db);
+        household.InviteCodeExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+        CreateMember(db, household.Id, owner.Id, "Owner");
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, joiner.Id);
+        var result = await controller.JoinHousehold(new JoinHouseholdRequest(household.InviteCode));
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Invite code expired. Ask the owner to regenerate a new invite link.", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task RegenerateInvite_RotatesCodeAndMarksPreviousInvitesInactive()
+    {
+        await using var db = CreateDb();
+        var owner = CreateUser(db, "owner7@test.com");
+        var household = CreateHousehold(db);
+        CreateMember(db, household.Id, owner.Id, "Owner");
+        db.HouseholdInvites.Add(new HouseholdInvite
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = household.Id,
+            InviteCode = household.InviteCode,
+            IsActive = true,
+            CreatedByUserId = owner.Id,
+            CreatedAtUtc = DateTime.UtcNow.AddDays(-1),
+            ExpiresAtUtc = DateTime.UtcNow.AddDays(4)
+        });
+        await db.SaveChangesAsync();
+
+        var oldCode = household.InviteCode;
+        var controller = CreateController(db, owner.Id);
+        var result = await controller.RegenerateInvite();
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<HouseholdInviteDto>(ok.Value);
+        Assert.NotEqual(oldCode, dto.InviteCode);
+
+        var activeCount = await db.HouseholdInvites.CountAsync(i => i.HouseholdId == household.Id && i.IsActive);
+        Assert.Equal(1, activeCount);
     }
 
     private static AppDbContext CreateDb()

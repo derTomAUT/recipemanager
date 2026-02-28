@@ -6,6 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "pwa": "ng build --configuration pwa && npx http-server dist/frontend/browser -p 4200 -c-1",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
@@ -39,6 +41,7 @@
     "@angular/build": "^21.1.5",
     "@angular/cli": "^21.1.5",
     "@angular/compiler-cli": "^21.1.0",
+    "@playwright/test": "^1.58.2",
     "@types/gsi": "^0.0.5",
     "jsdom": "^27.1.0",
     "typescript": "~5.9.2",

@@ -14,6 +14,7 @@ namespace RecipeManager.Api.Controllers;
 [Authorize]
 public class HouseholdController : ControllerBase
 {
+    private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(5);
     private readonly AppDbContext _db;
 
     public HouseholdController(AppDbContext db)
@@ -49,7 +50,9 @@ public class HouseholdController : ControllerBase
         {
             Id = Guid.NewGuid(),
             Name = request.Name,
-            InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()
+            InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant(),
+            InviteCodeCreatedAtUtc = DateTime.UtcNow,
+            InviteCodeExpiresAtUtc = DateTime.UtcNow.Add(InviteLifetime)
         };
 
         var member = new HouseholdMember
@@ -62,6 +65,24 @@ public class HouseholdController : ControllerBase
 
         _db.Households.Add(household);
         _db.HouseholdMembers.Add(member);
+        _db.HouseholdInvites.Add(new HouseholdInvite
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = household.Id,
+            InviteCode = household.InviteCode,
+            CreatedAtUtc = household.InviteCodeCreatedAtUtc,
+            ExpiresAtUtc = household.InviteCodeExpiresAtUtc,
+            IsActive = true,
+            CreatedByUserId = userId.Value
+        });
+        _db.HouseholdActivityLogs.Add(new HouseholdActivityLog
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = household.Id,
+            ActorUserId = userId.Value,
+            EventType = "HouseholdCreated",
+            Details = $"Invite {household.InviteCode} created"
+        });
         await _db.SaveChangesAsync();
 
         var dto = new HouseholdDto(
@@ -111,6 +132,10 @@ public class HouseholdController : ControllerBase
         {
             return NotFound("Invalid invite code");
         }
+        if (household.InviteCodeExpiresAtUtc <= DateTime.UtcNow)
+        {
+            return BadRequest("Invite code expired. Ask the owner to regenerate a new invite link.");
+        }
 
         var member = new HouseholdMember
         {
@@ -121,6 +146,15 @@ public class HouseholdController : ControllerBase
         };
 
         _db.HouseholdMembers.Add(member);
+        _db.HouseholdActivityLogs.Add(new HouseholdActivityLog
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = household.Id,
+            ActorUserId = userId.Value,
+            TargetUserId = userId.Value,
+            EventType = "MemberJoined",
+            Details = $"Joined with invite {household.InviteCode}"
+        });
         await _db.SaveChangesAsync();
 
         var members = household.Members.Select(m =>
@@ -282,6 +316,14 @@ public class HouseholdController : ControllerBase
         }
 
         _db.HouseholdMembers.Remove(targetMembership);
+        _db.HouseholdActivityLogs.Add(new HouseholdActivityLog
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = currentMembership.HouseholdId,
+            ActorUserId = currentUserId.Value,
+            TargetUserId = targetUserId,
+            EventType = "MemberRemoved"
+        });
         await _db.SaveChangesAsync();
 
         return NoContent();
@@ -326,14 +368,36 @@ public class HouseholdController : ControllerBase
             {
                 return BadRequest("At least one active member must remain in the household");
             }
-        }
 
-        if (targetUserId == currentUserId.Value)
-        {
-            return BadRequest("Owner cannot disable themselves");
+            if (targetMembership.Role == "Owner")
+            {
+                var activeOwnerCount = await _db.HouseholdMembers
+                    .CountAsync(hm =>
+                        hm.HouseholdId == currentMembership.HouseholdId &&
+                        hm.IsActive &&
+                        hm.Role == "Owner");
+
+                if (activeOwnerCount <= 1)
+                {
+                    return BadRequest("Cannot disable the last active owner. Promote another member to Owner first.");
+                }
+            }
+
+            if (targetUserId == currentUserId.Value)
+            {
+                return BadRequest("Owner cannot disable themselves");
+            }
         }
 
         targetMembership.IsActive = false;
+        _db.HouseholdActivityLogs.Add(new HouseholdActivityLog
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = currentMembership.HouseholdId,
+            ActorUserId = currentUserId.Value,
+            TargetUserId = targetUserId,
+            EventType = "MemberDisabled"
+        });
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -369,8 +433,158 @@ public class HouseholdController : ControllerBase
         }
 
         targetMembership.IsActive = true;
+        _db.HouseholdActivityLogs.Add(new HouseholdActivityLog
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = currentMembership.HouseholdId,
+            ActorUserId = currentUserId.Value,
+            TargetUserId = targetUserId,
+            EventType = "MemberEnabled"
+        });
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPost("members/{targetUserId:guid}/role")]
+    public async Task<IActionResult> UpdateMemberRole(Guid targetUserId, [FromBody] UpdateHouseholdMemberRoleRequest request)
+    {
+        var currentUserId = GetUserId();
+        if (currentUserId == null) return Unauthorized();
+
+        var currentMembership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == currentUserId.Value && hm.IsActive);
+        if (currentMembership == null) return NotFound("Current user has no active household");
+        if (currentMembership.Role != "Owner") return Forbid();
+
+        var role = request.Role.Trim();
+        if (role != "Owner" && role != "Member" && role != "Viewer")
+        {
+            return BadRequest("Role must be Owner, Member, or Viewer");
+        }
+
+        var targetMembership = await _db.HouseholdMembers
+            .FirstOrDefaultAsync(hm => hm.UserId == targetUserId && hm.HouseholdId == currentMembership.HouseholdId);
+        if (targetMembership == null) return NotFound("Member not found in household");
+
+        if (targetMembership.Role == "Owner" && role != "Owner")
+        {
+            var activeOwnerCount = await _db.HouseholdMembers
+                .CountAsync(hm => hm.HouseholdId == currentMembership.HouseholdId && hm.IsActive && hm.Role == "Owner");
+            if (activeOwnerCount <= 1)
+            {
+                return BadRequest("At least one active owner must remain in the household");
+            }
+        }
+
+        targetMembership.Role = role;
+        _db.HouseholdActivityLogs.Add(new HouseholdActivityLog
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = currentMembership.HouseholdId,
+            ActorUserId = currentUserId.Value,
+            TargetUserId = targetUserId,
+            EventType = "MemberRoleUpdated",
+            Details = $"Role set to {role}"
+        });
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpGet("invite")]
+    public async Task<ActionResult<HouseholdInviteDto>> GetInvite()
+    {
+        var membership = await GetMembershipAsync();
+        if (membership == null) return Unauthorized();
+        if (membership.Value.role != "Owner") return Forbid();
+
+        var household = await _db.Households.FindAsync(membership.Value.householdId);
+        if (household == null) return NotFound();
+
+        return Ok(new HouseholdInviteDto(
+            household.InviteCode,
+            household.InviteCodeCreatedAtUtc,
+            household.InviteCodeExpiresAtUtc,
+            household.InviteCodeExpiresAtUtc <= DateTime.UtcNow
+        ));
+    }
+
+    [HttpPost("invite/regenerate")]
+    public async Task<ActionResult<HouseholdInviteDto>> RegenerateInvite()
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+
+        var membership = await GetMembershipAsync();
+        if (membership == null) return Unauthorized();
+        if (membership.Value.role != "Owner") return Forbid();
+
+        var household = await _db.Households.FindAsync(membership.Value.householdId);
+        if (household == null) return NotFound();
+
+        var now = DateTime.UtcNow;
+        household.InviteCode = Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+        household.InviteCodeCreatedAtUtc = now;
+        household.InviteCodeExpiresAtUtc = now.Add(InviteLifetime);
+
+        var activeInvites = await _db.HouseholdInvites
+            .Where(i => i.HouseholdId == household.Id && i.IsActive)
+            .ToListAsync();
+        foreach (var invite in activeInvites)
+        {
+            invite.IsActive = false;
+        }
+
+        _db.HouseholdInvites.Add(new HouseholdInvite
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = household.Id,
+            InviteCode = household.InviteCode,
+            CreatedAtUtc = household.InviteCodeCreatedAtUtc,
+            ExpiresAtUtc = household.InviteCodeExpiresAtUtc,
+            IsActive = true,
+            CreatedByUserId = userId.Value
+        });
+        _db.HouseholdActivityLogs.Add(new HouseholdActivityLog
+        {
+            Id = Guid.NewGuid(),
+            HouseholdId = household.Id,
+            ActorUserId = userId.Value,
+            EventType = "InviteRegenerated",
+            Details = $"New invite {household.InviteCode}"
+        });
+
+        await _db.SaveChangesAsync();
+        return Ok(new HouseholdInviteDto(
+            household.InviteCode,
+            household.InviteCodeCreatedAtUtc,
+            household.InviteCodeExpiresAtUtc,
+            false
+        ));
+    }
+
+    [HttpGet("activity")]
+    public async Task<ActionResult<List<HouseholdActivityDto>>> GetActivity([FromQuery] int limit = 50)
+    {
+        var membership = await GetMembershipAsync();
+        if (membership == null) return Unauthorized();
+        if (membership.Value.role != "Owner") return Forbid();
+
+        limit = Math.Clamp(limit, 1, 200);
+        var items = await _db.HouseholdActivityLogs
+            .Where(l => l.HouseholdId == membership.Value.householdId)
+            .OrderByDescending(l => l.CreatedAtUtc)
+            .Take(limit)
+            .Select(l => new HouseholdActivityDto(
+                l.Id,
+                l.EventType,
+                l.ActorUserId,
+                l.TargetUserId,
+                l.Details,
+                l.CreatedAtUtc
+            ))
+            .ToListAsync();
+
+        return Ok(items);
     }
 
     private Guid? GetUserId()
