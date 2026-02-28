@@ -500,6 +500,11 @@ public class RecipeController : ControllerBase
             _logger.LogWarning(ex, "Recipe import timed out: {Url}", request.Url);
             return StatusCode(504, "Fetching the recipe page timed out. Please try again.");
         }
+        catch (AiKeyDecryptionException ex)
+        {
+            _logger.LogWarning(ex, "Recipe import AI key decryption failed for {Url}", request.Url);
+            return BadRequest("Stored AI API key can no longer be decrypted. Please open Household Settings and save your API key again.");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to import recipe from URL: {Url}", request.Url);

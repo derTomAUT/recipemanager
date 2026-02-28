@@ -10,6 +10,7 @@ Persistent Docker volumes:
 - `recipemanager_postgres_data` for database data
 - `recipemanager_uploads` for uploaded recipe images/files
 - `recipemanager_logs` for backend logs
+- `recipemanager_dpkeys` for ASP.NET Data Protection key ring
 - `recipemanager_letsencrypt` for ACME cert state
 
 ## 1) Required GitHub Secrets

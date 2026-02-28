@@ -63,39 +63,57 @@ public class RecipeImportService
         }
         else if (HasAiSettings(household))
         {
-            var htmlHasIngredientsTable = html.Contains("ingredients-table", StringComparison.OrdinalIgnoreCase);
-            var extractedRows = CountIngredientRowsInHtml(html);
-            var readableText = ExtractReadableText(html);
-            var readableHasIngredientSection = readableText.Contains("Ingredients table rows:", StringComparison.Ordinal);
-            var wasTruncated = readableText.Length > 100_000;
-            if (wasTruncated)
+            try
             {
-                readableText = readableText[..100_000];
+                var htmlHasIngredientsTable = html.Contains("ingredients-table", StringComparison.OrdinalIgnoreCase);
+                var extractedRows = CountIngredientRowsInHtml(html);
+                var readableText = ExtractReadableText(html);
+                var readableHasIngredientSection = readableText.Contains("Ingredients table rows:", StringComparison.Ordinal);
+                var wasTruncated = readableText.Length > 100_000;
+                if (wasTruncated)
+                {
+                    readableText = readableText[..100_000];
+                }
+
+                _logger?.LogInformation(
+                    "AI import diagnostics for {Url}: htmlHasIngredientsTable={HtmlHasIngredientsTable}, extractedIngredientRows={ExtractedRows}, readableHasIngredientSection={ReadableHasIngredientSection}, readableLength={ReadableLength}, truncated={Truncated}",
+                    url,
+                    htmlHasIngredientsTable,
+                    extractedRows,
+                    readableHasIngredientSection,
+                    readableText.Length,
+                    wasTruncated);
+
+                _logger?.LogDebug(
+                    "AI readable text preview for {Url}: {ReadableTextPreview}",
+                    url,
+                    BuildPreview(readableText, 1500));
+
+                draft = await _aiImportService.ImportAsync(
+                    household.AiProvider!,
+                    household.AiModel!,
+                    household.AiApiKeyEncrypted!,
+                    url,
+                    readableText,
+                    wasTruncated,
+                    household.Id,
+                    userId);
             }
-
-            _logger?.LogInformation(
-                "AI import diagnostics for {Url}: htmlHasIngredientsTable={HtmlHasIngredientsTable}, extractedIngredientRows={ExtractedRows}, readableHasIngredientSection={ReadableHasIngredientSection}, readableLength={ReadableLength}, truncated={Truncated}",
-                url,
-                htmlHasIngredientsTable,
-                extractedRows,
-                readableHasIngredientSection,
-                readableText.Length,
-                wasTruncated);
-
-            _logger?.LogDebug(
-                "AI readable text preview for {Url}: {ReadableTextPreview}",
-                url,
-                BuildPreview(readableText, 1500));
-
-            draft = await _aiImportService.ImportAsync(
-                household.AiProvider!,
-                household.AiModel!,
-                household.AiApiKeyEncrypted!,
-                url,
-                readableText,
-                wasTruncated,
-                household.Id,
-                userId);
+            catch (AiKeyDecryptionException ex)
+            {
+                _logger?.LogWarning(ex, "AI key decryption failed during import for {Url}; falling back to heuristics.", url);
+                var heuristicDraft = TryParseHeuristics(html);
+                var warnings = new List<string>(heuristicDraft.Warnings)
+                {
+                    "Stored AI API key can no longer be decrypted. Please re-save it in Household Settings.",
+                    "Used heuristic extraction fallback."
+                };
+                draft = heuristicDraft with
+                {
+                    ConfidenceScore = 0.4,
+                    Warnings = warnings
+                };
+            }
         }
         else
         {

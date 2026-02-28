@@ -1,6 +1,8 @@
 using System.Text;
+using System.IO;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
@@ -68,7 +70,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddDataProtection();
+
+var configuredDataProtectionPath = builder.Configuration["DataProtection:KeysPath"];
+var defaultDataProtectionPath = builder.Environment.IsDevelopment()
+    ? "./dpkeys"
+    : "/app/dpkeys";
+var dataProtectionPath = configuredDataProtectionPath ?? defaultDataProtectionPath;
+var dataProtectionKeysRoot = Path.IsPathRooted(dataProtectionPath)
+    ? dataProtectionPath
+    : Path.Combine(builder.Environment.ContentRootPath, dataProtectionPath);
+Directory.CreateDirectory(dataProtectionKeysRoot);
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("RecipeManager.Api")
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysRoot));
 
 // Serilog
 Log.Logger = new LoggerConfiguration()

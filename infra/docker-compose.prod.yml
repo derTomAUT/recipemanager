@@ -64,6 +64,7 @@ services:
     volumes:
       - recipemanager_uploads:/app/uploads
       - recipemanager_logs:/app/logs
+      - recipemanager_dpkeys:/app/dpkeys
     expose:
       - "8080"
 
@@ -87,4 +88,5 @@ volumes:
   recipemanager_postgres_data:
   recipemanager_uploads:
   recipemanager_logs:
+  recipemanager_dpkeys:
   recipemanager_letsencrypt:

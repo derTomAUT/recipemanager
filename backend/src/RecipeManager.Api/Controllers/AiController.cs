@@ -52,7 +52,14 @@ public class AiController : ControllerBase
             return BadRequest("API key not set");
         }
 
-        var models = await _catalog.GetModelsAsync(provider, household.AiApiKeyEncrypted, membership.HouseholdId, uid);
-        return Ok(models);
+        try
+        {
+            var models = await _catalog.GetModelsAsync(provider, household.AiApiKeyEncrypted, membership.HouseholdId, uid);
+            return Ok(models);
+        }
+        catch (AiKeyDecryptionException)
+        {
+            return BadRequest("Stored AI API key can no longer be decrypted. Please save your API key again in Household Settings.");
+        }
     }
 }
