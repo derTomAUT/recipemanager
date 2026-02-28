@@ -123,6 +123,14 @@ import { buildHouseholdInviteLink, getApiErrorMessage } from './household-settin
           <button class="btn-secondary" type="button" (click)="clearCoordinates()" [disabled]="saving">
             Clear
           </button>
+          <span
+            *ngIf="locationSaveStatus"
+            class="location-save-status"
+            [class.location-save-status-success]="locationSaveStatus === 'success'"
+            [class.location-save-status-error]="locationSaveStatus === 'error'"
+          >
+            {{ locationSaveStatus === 'success' ? 'Location saved' : 'Error when saving' }}
+          </span>
         </div>
       </section>
 
@@ -213,6 +221,9 @@ import { buildHouseholdInviteLink, getApiErrorMessage } from './household-settin
     .map-shell { border: 1px solid color-mix(in srgb, var(--text) 16%, transparent); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); }
     .location-map { width: 100%; height: 280px; }
     .coord-row { margin-top: 0.65rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; color: var(--muted); }
+    .location-save-status { font-size: 0.9rem; font-weight: 600; }
+    .location-save-status-success { color: var(--secondary); }
+    .location-save-status-error { color: var(--primary); }
   `]
 })
 export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -248,6 +259,8 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
   private marker?: L.CircleMarker;
   private viewInitialized = false;
   private locationSaveTimer?: ReturnType<typeof setTimeout>;
+  private locationStatusHideTimer?: ReturnType<typeof setTimeout>;
+  locationSaveStatus: 'success' | 'error' | null = null;
 
   constructor(
     private authService: AuthService,
@@ -279,6 +292,9 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
   ngOnDestroy() {
     if (this.locationSaveTimer) {
       clearTimeout(this.locationSaveTimer);
+    }
+    if (this.locationStatusHideTimer) {
+      clearTimeout(this.locationStatusHideTimer);
     }
     this.map?.remove();
   }
@@ -624,6 +640,7 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
   }
 
   private persistLocation() {
+    this.clearLocationStatus();
     this.settingsService.updateLocation({
       latitude: this.latitude ?? undefined,
       longitude: this.longitude ?? undefined
@@ -631,10 +648,32 @@ export class HouseholdSettingsComponent implements OnInit, AfterViewInit, OnDest
       next: (settings) => {
         this.latitude = settings.latitude ?? null;
         this.longitude = settings.longitude ?? null;
+        this.showLocationStatus('success');
       },
       error: (error) => {
         this.error = getApiErrorMessage(error, 'Failed to save location');
+        this.showLocationStatus('error');
       }
     });
+  }
+
+  private showLocationStatus(status: 'success' | 'error') {
+    this.locationSaveStatus = status;
+    if (this.locationStatusHideTimer) {
+      clearTimeout(this.locationStatusHideTimer);
+    }
+
+    this.locationStatusHideTimer = setTimeout(() => {
+      this.locationSaveStatus = null;
+      this.locationStatusHideTimer = undefined;
+    }, 5000);
+  }
+
+  private clearLocationStatus() {
+    if (this.locationStatusHideTimer) {
+      clearTimeout(this.locationStatusHideTimer);
+      this.locationStatusHideTimer = undefined;
+    }
+    this.locationSaveStatus = null;
   }
 }
