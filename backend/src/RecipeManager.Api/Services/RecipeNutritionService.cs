@@ -170,26 +170,24 @@ public class RecipeNutritionService
                 return $"- {quantity} {unit} {i.Name}{notes}".Trim();
             });
 
-        return $"""
-Estimate nutrition for this recipe and return JSON only.
+        var ingredientsText = string.Join("\n", ingredientLines);
 
-Recipe title: {recipe.Title}
-Servings: {servings}
-Ingredients:
-{string.Join("\n", ingredientLines)}
-
-Output schema:
-{{
-  "perServing": {{ "calories": number, "protein": number, "carbs": number, "fat": number, "fiber": number|null, "sugar": number|null, "sodiumMg": number|null }},
-  "total": {{ "calories": number, "protein": number, "carbs": number, "fat": number, "fiber": number|null, "sugar": number|null, "sodiumMg": number|null }},
-  "notes": "short plain text"
-}}
-
-Rules:
-- use decimal numbers where appropriate
-- never return negative values
-- if data is unknown use null for optional micronutrients
-- return JSON only without markdown fences
-""";
+        return
+            "Estimate nutrition for this recipe and return JSON only.\n\n" +
+            $"Recipe title: {recipe.Title}\n" +
+            $"Servings: {servings}\n" +
+            "Ingredients:\n" +
+            $"{ingredientsText}\n\n" +
+            "Output schema:\n" +
+            "{\n" +
+            "  \"perServing\": { \"calories\": number, \"protein\": number, \"carbs\": number, \"fat\": number, \"fiber\": number|null, \"sugar\": number|null, \"sodiumMg\": number|null },\n" +
+            "  \"total\": { \"calories\": number, \"protein\": number, \"carbs\": number, \"fat\": number, \"fiber\": number|null, \"sugar\": number|null, \"sodiumMg\": number|null },\n" +
+            "  \"notes\": \"short plain text\"\n" +
+            "}\n\n" +
+            "Rules:\n" +
+            "- use decimal numbers where appropriate\n" +
+            "- never return negative values\n" +
+            "- if data is unknown use null for optional micronutrients\n" +
+            "- return JSON only without markdown fences";
     }
 }
