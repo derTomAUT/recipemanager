@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using RecipeManager.Api.Models;
 using RecipeManager.Api.Services;
 using Xunit;
@@ -64,6 +65,37 @@ public class MealAssistantServiceTests
         Assert.Equal(3, suggestions.Count);
     }
 
+    [Fact]
+    public void ParseAiSuggestions_AcceptsJsonWrappedInCodeFence()
+    {
+        var recipeId = Guid.NewGuid();
+        var payload =
+            "```json\n" +
+            $"{{\"suggestions\":[{{\"recipeId\":\"{recipeId}\",\"reason\":\"Comforting and warm.\"}}]}}\n" +
+            "```";
+
+        var parsed = InvokeParseAiSuggestions(payload);
+
+        Assert.Single(parsed);
+        Assert.Equal(recipeId, parsed[0].RecipeId);
+        Assert.Equal("Comforting and warm.", parsed[0].Reason);
+    }
+
+    [Fact]
+    public void ParseAiSuggestions_AcceptsJsonEmbeddedInText()
+    {
+        var recipeId = Guid.NewGuid();
+        var payload =
+            "Here are your picks:\n" +
+            $"{{\"suggestions\":[{{\"recipeId\":\"{recipeId}\",\"reason\":\"Great for tomorrow lunch.\"}}]}}\n" +
+            "Enjoy!";
+
+        var parsed = InvokeParseAiSuggestions(payload);
+
+        Assert.Single(parsed);
+        Assert.Equal(recipeId, parsed[0].RecipeId);
+    }
+
     private static Recipe BuildRecipe(string title, IEnumerable<string> ingredientNames, IEnumerable<string> tags)
     {
         var recipe = new Recipe
@@ -93,4 +125,26 @@ public class MealAssistantServiceTests
 
         return recipe;
     }
+
+    private static List<ParsedSuggestion> InvokeParseAiSuggestions(string content)
+    {
+        var method = typeof(MealAssistantService).GetMethod("ParseAiSuggestions", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var result = method!.Invoke(null, new object?[] { content });
+        Assert.NotNull(result);
+
+        var list = new List<ParsedSuggestion>();
+        foreach (var item in (System.Collections.IEnumerable)result!)
+        {
+            var itemType = item!.GetType();
+            var recipeIdValue = itemType.GetProperty("RecipeId")!.GetValue(item);
+            var reasonValue = itemType.GetProperty("Reason")!.GetValue(item);
+            list.Add(new ParsedSuggestion((Guid)recipeIdValue!, (string)reasonValue!));
+        }
+
+        return list;
+    }
+
+    private readonly record struct ParsedSuggestion(Guid RecipeId, string Reason);
 }

@@ -280,8 +280,7 @@ public class MealAssistantService
                 response.EnsureSuccessStatusCode();
             }
             await LogAiDebugAsync(household.Id, userId, provider!, model!, payloadJson, body, (int)response.StatusCode, true, null);
-            using var doc = JsonDocument.Parse(body);
-            var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            var content = AiResponseParser.ExtractOpenAiMessageContent(body);
             return ParseAiSuggestions(content);
         }
 
@@ -323,8 +322,7 @@ public class MealAssistantService
                 response.EnsureSuccessStatusCode();
             }
             await LogAiDebugAsync(household.Id, userId, provider!, model!, payloadJson, body, (int)response.StatusCode, true, null);
-            using var doc = JsonDocument.Parse(body);
-            var content = doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
+            var content = AiResponseParser.ExtractAnthropicMessageText(body);
             return ParseAiSuggestions(content);
         }
 
@@ -338,32 +336,96 @@ public class MealAssistantService
             return new List<AiCandidateSelection>();
         }
 
-        using var doc = JsonDocument.Parse(jsonContent);
-        if (!doc.RootElement.TryGetProperty("suggestions", out var list) || list.ValueKind != JsonValueKind.Array)
+        var candidateJson = AiResponseParser.ExtractJsonObjectText(jsonContent);
+        if (string.IsNullOrWhiteSpace(candidateJson) || !TryParseSuggestionsFromJson(candidateJson, out var parsed))
         {
-            return new List<AiCandidateSelection>();
+            throw new JsonException("Unable to parse AI meal assistant suggestions from response content.");
         }
 
-        var result = new List<AiCandidateSelection>();
-        foreach (var item in list.EnumerateArray())
+        return parsed;
+    }
+
+    private static bool TryParseSuggestionsFromJson(string json, out List<AiCandidateSelection> result)
+    {
+        try
         {
-            var idText = item.TryGetProperty("recipeId", out var idEl) && idEl.ValueKind == JsonValueKind.String
-                ? idEl.GetString()
-                : null;
-            if (!Guid.TryParse(idText, out var recipeId))
+            using var doc = JsonDocument.Parse(json);
+            if (!TryGetSuggestionsArray(doc.RootElement, out var list))
             {
-                continue;
+                result = new List<AiCandidateSelection>();
+                return false;
             }
 
-            var reason = item.TryGetProperty("reason", out var reasonEl) && reasonEl.ValueKind == JsonValueKind.String
-                ? reasonEl.GetString() ?? string.Empty
-                : string.Empty;
+            result = new List<AiCandidateSelection>();
+            foreach (var item in list.EnumerateArray())
+            {
+                var idText = TryGetString(item, "recipeId") ?? TryGetString(item, "id");
+                if (!Guid.TryParse(idText, out var recipeId))
+                {
+                    continue;
+                }
 
-            result.Add(new AiCandidateSelection(recipeId, reason));
+                var reason = TryGetString(item, "reason")
+                             ?? TryGetString(item, "rationale")
+                             ?? TryGetString(item, "why")
+                             ?? string.Empty;
+
+                result.Add(new AiCandidateSelection(recipeId, reason));
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            result = new List<AiCandidateSelection>();
+            return false;
+        }
+    }
+
+    private static bool TryGetSuggestionsArray(JsonElement root, out JsonElement list)
+    {
+        if (TryGetPropertyIgnoreCase(root, "suggestions", out list) && list.ValueKind == JsonValueKind.Array)
+        {
+            return true;
         }
 
-        return result;
+        if (TryGetPropertyIgnoreCase(root, "data", out var data) &&
+            data.ValueKind == JsonValueKind.Object &&
+            TryGetPropertyIgnoreCase(data, "suggestions", out list) &&
+            list.ValueKind == JsonValueKind.Array)
+        {
+            return true;
+        }
+
+        list = default;
+        return false;
     }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement element, string propertyName, out JsonElement value)
+    {
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (prop.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = prop.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static string? TryGetString(JsonElement element, string propertyName)
+    {
+        if (!TryGetPropertyIgnoreCase(element, propertyName, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+    }
+
 
     private static bool HasAiSettings(Household household)
     {

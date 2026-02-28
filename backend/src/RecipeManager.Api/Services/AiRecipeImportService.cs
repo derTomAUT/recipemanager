@@ -77,10 +77,9 @@ public class AiRecipeImportService
             }
 
             await LogDebugAsync(householdId, userId, provider, model, AiOperation.RecipeImport, payloadJson, responseBody, (int)response.StatusCode, true, null);
-            using var json = JsonDocument.Parse(responseBody);
-            var content = json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            var content = AiResponseParser.ExtractOpenAiMessageContent(responseBody);
             _logger.LogDebug("AI import response (OpenAI): {Json}", content);
-            return ParseDraftFromJson(SanitizeJson(content));
+            return ParseDraftFromJson(AiResponseParser.ExtractJsonObjectText(content));
         }
 
         if (provider == "Anthropic")
@@ -105,10 +104,9 @@ public class AiRecipeImportService
             }
 
             await LogDebugAsync(householdId, userId, provider, model, AiOperation.RecipeImport, payloadJson, responseBody, (int)response.StatusCode, true, null);
-            using var json = JsonDocument.Parse(responseBody);
-            var content = json.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
+            var content = AiResponseParser.ExtractAnthropicMessageText(responseBody);
             _logger.LogDebug("AI import response (Anthropic): {Json}", content);
-            return ParseDraftFromJson(SanitizeJson(content));
+            return ParseDraftFromJson(AiResponseParser.ExtractJsonObjectText(content));
         }
 
         throw new InvalidOperationException("Unsupported AI provider");
@@ -174,10 +172,9 @@ public class AiRecipeImportService
             }
 
             await LogDebugAsync(householdId, userId, provider, model, AiOperation.ImageSelection, payloadJson, responseBody, (int)response.StatusCode, true, null);
-            using var json = JsonDocument.Parse(responseBody);
-            var contentText = json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            var contentText = AiResponseParser.ExtractOpenAiMessageContent(responseBody);
             _logger.LogDebug("AI image selection response (OpenAI): {Json}", contentText);
-            return ParseImageSelection(SanitizeJson(contentText));
+            return ParseImageSelection(AiResponseParser.ExtractJsonObjectText(contentText));
         }
 
         if (provider == "Anthropic")
@@ -220,10 +217,9 @@ public class AiRecipeImportService
             }
 
             await LogDebugAsync(householdId, userId, provider, model, AiOperation.ImageSelection, payloadJson, responseBody, (int)response.StatusCode, true, null);
-            using var json = JsonDocument.Parse(responseBody);
-            var contentText = json.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
+            var contentText = AiResponseParser.ExtractAnthropicMessageText(responseBody);
             _logger.LogDebug("AI image selection response (Anthropic): {Json}", contentText);
-            return ParseImageSelection(SanitizeJson(contentText));
+            return ParseImageSelection(AiResponseParser.ExtractJsonObjectText(contentText));
         }
 
         return null;
@@ -322,34 +318,6 @@ public class AiRecipeImportService
             : _debugLogService.LogAsync(householdId, userId, provider, model, operation, requestJson, responseJson, statusCode, success, error);
     }
 
-    private static string SanitizeJson(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return string.Empty;
-        }
-
-        var trimmed = json.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
-        {
-            return trimmed;
-        }
-
-        var startFenceEnd = trimmed.IndexOf('\n');
-        if (startFenceEnd < 0)
-        {
-            return trimmed;
-        }
-
-        var endFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
-        if (endFence <= startFenceEnd)
-        {
-            return trimmed;
-        }
-
-        return trimmed.Substring(startFenceEnd + 1, endFence - startFenceEnd - 1).Trim();
-    }
-
     private static string? GetFlexibleString(JsonElement element)
     {
         return element.ValueKind switch
@@ -392,7 +360,7 @@ public class AiRecipeImportService
         return null;
     }
 
-    private static AiImageSelection? ParseImageSelection(string json)
+    private static AiImageSelection? ParseImageSelection(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {

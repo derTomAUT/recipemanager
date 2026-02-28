@@ -122,7 +122,7 @@ public class PaperCardVisionService : IPaperCardVisionService
                 }
 
                 using var doc = JsonDocument.Parse(responseBody);
-                contentText = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+                contentText = AiResponseParser.ExtractOpenAiMessageContent(responseBody);
             }
             else if (provider == "Anthropic")
             {
@@ -140,8 +140,7 @@ public class PaperCardVisionService : IPaperCardVisionService
                     return BuildFallback(fallbackTitle, $"AI parsing failed with status {statusCode}. You can still edit manually.");
                 }
 
-                using var doc = JsonDocument.Parse(responseBody);
-                contentText = doc.RootElement.GetProperty("content")[0].GetProperty("text").GetString();
+                contentText = AiResponseParser.ExtractAnthropicMessageText(responseBody);
             }
             else
             {
@@ -350,7 +349,7 @@ public class PaperCardVisionService : IPaperCardVisionService
 
     private static PaperCardVisionResult ParseResult(string? content, string fallbackTitle)
     {
-        var sanitized = SanitizeJson(content);
+        var sanitized = AiResponseParser.ExtractJsonObjectText(content) ?? "{}";
         using var doc = JsonDocument.Parse(sanitized);
         var root = doc.RootElement;
 
@@ -494,34 +493,6 @@ public class PaperCardVisionService : IPaperCardVisionService
         }
 
         return el.ValueKind == JsonValueKind.Number && el.TryGetDouble(out value);
-    }
-
-    private static string SanitizeJson(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return "{}";
-        }
-
-        var trimmed = json.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
-        {
-            return trimmed;
-        }
-
-        var startFenceEnd = trimmed.IndexOf('\n');
-        if (startFenceEnd < 0)
-        {
-            return trimmed;
-        }
-
-        var endFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
-        if (endFence <= startFenceEnd)
-        {
-            return trimmed;
-        }
-
-        return trimmed.Substring(startFenceEnd + 1, endFence - startFenceEnd - 1).Trim();
     }
 
     private async Task LogDebugAsync(
