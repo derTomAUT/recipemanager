@@ -1,4 +1,4 @@
-import { Component, OnDestroy, AfterViewInit } from '@angular/core';
+import { Component, NgZone, OnDestroy, AfterViewInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../services/auth.service';
@@ -33,7 +33,7 @@ declare const google: any;
 export class LoginComponent implements AfterViewInit, OnDestroy {
   error = '';
 
-  constructor(private auth: AuthService, private router: Router) {}
+  constructor(private auth: AuthService, private router: Router, private ngZone: NgZone) {}
 
   ngAfterViewInit() {
     this.initGoogleSignIn();
@@ -48,7 +48,7 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
 
     google.accounts.id.initialize({
       client_id: environment.googleClientId,
-      callback: (response: any) => this.handleGoogleLogin(response)
+      callback: (response: any) => this.ngZone.run(() => this.handleGoogleLogin(response))
     });
 
     google.accounts.id.renderButton(
