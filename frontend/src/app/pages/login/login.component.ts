@@ -60,7 +60,14 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
   private handleGoogleLogin(response: any) {
     this.error = '';
     this.auth.googleLogin(response.credential).subscribe({
-      next: () => this.router.navigate(['/']),
+      next: () => {
+        const pendingInvite = localStorage.getItem('pending_invite_code');
+        if (pendingInvite) {
+          this.router.navigate(['/household/setup'], { queryParams: { invite: pendingInvite } });
+        } else {
+          this.router.navigate(['/']);
+        }
+      },
       error: () => this.error = 'Login failed. Please try again.'
     });
   }

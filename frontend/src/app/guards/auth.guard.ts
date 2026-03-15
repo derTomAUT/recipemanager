@@ -15,7 +15,9 @@ export const authGuard: CanActivateFn = () => {
   return authService.user$.pipe(
     map(user => {
       if (!user?.householdId) {
-        router.navigate(['/household/setup']);
+        const pendingInvite = localStorage.getItem('pending_invite_code');
+        const queryParams = pendingInvite ? { invite: pendingInvite } : undefined;
+        router.navigate(['/household/setup'], { queryParams });
         return false;
       }
       return true;
