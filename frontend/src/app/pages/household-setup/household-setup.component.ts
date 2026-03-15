@@ -50,15 +50,21 @@ export class HouseholdSetupComponent {
     private router: Router,
     private authService: AuthService
   ) {
-    const invite = this.route.snapshot.queryParamMap.get('invite');
+    const invite = this.route.snapshot.queryParamMap.get('invite')
+      || localStorage.getItem('pending_invite_code');
     if (invite) {
       this.inviteCode = invite;
       this.tab = 'join';
+      localStorage.removeItem('pending_invite_code');
     }
   }
 
   create() {
     this.error = '';
+    if (!this.authService.isAuthenticated()) {
+      this.redirectToLogin();
+      return;
+    }
     this.http.post(`${environment.apiUrl}/household`, { name: this.householdName })
       .subscribe({
         next: () => this.onHouseholdCreated(),
@@ -68,6 +74,11 @@ export class HouseholdSetupComponent {
 
   join() {
     this.error = '';
+    if (!this.authService.isAuthenticated()) {
+      localStorage.setItem('pending_invite_code', this.inviteCode);
+      this.redirectToLogin();
+      return;
+    }
     this.http.post(`${environment.apiUrl}/household/join`, { inviteCode: this.inviteCode })
       .subscribe({
         next: () => this.onHouseholdCreated(),
@@ -76,6 +87,10 @@ export class HouseholdSetupComponent {
           'Failed to join household. Check the invite code and try again.'
         )
       });
+  }
+
+  private redirectToLogin() {
+    this.router.navigate(['/login']);
   }
 
   private onHouseholdCreated() {
