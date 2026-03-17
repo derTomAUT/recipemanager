@@ -40,15 +40,15 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
   }
 
   private initGoogleSignIn() {
-    if (typeof google === 'undefined') {
-      // Wait for Google script to load
+    if (typeof google === 'undefined' || !google.accounts?.id) {
+      // Wait for Google script to fully load
       setTimeout(() => this.initGoogleSignIn(), 100);
       return;
     }
 
     google.accounts.id.initialize({
       client_id: environment.googleClientId,
-      callback: (response: any) => this.ngZone.run(() => this.handleGoogleLogin(response))
+      callback: (response: any) => this.ngZone.run(() => this.handleGoogleLogin(response)),
     });
 
     google.accounts.id.renderButton(
@@ -72,5 +72,9 @@ export class LoginComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  ngOnDestroy() {}
+  ngOnDestroy() {
+    if (typeof google !== 'undefined' && google.accounts?.id) {
+      google.accounts.id.cancel();
+    }
+  }
 }
